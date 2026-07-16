@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leduc-poker-escher-architecture-experiments"
+version = "0.1.0"
+description = "Model-free ESCHER architecture experiments for Leduc poker"
+requires-python = ">=3.9,<3.10"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "escher_poker",
+  "escher_poker.*",
+  "experiments",
+  "experiments.*",
+  "vr_deep_cfr",
+  "vr_deep_cfr.*",
+]
+exclude = [
+  "outputs*",
+  "notebooks*",
+  "thesis_artifacts*",
+  "gcp*",
+  "tests*",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "smoke: end-to-end smoke tests",
+]

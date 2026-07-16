@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual envs
+venv/
+.venv/
+!venv/PLACEHOLDER.md
+
+# Scratch experiment outputs. These directories may contain large cloud/local
+# outputs and should not be committed. Promote curated lightweight files with
+# scripts/promote_thesis_artifacts.py instead.
+outputs/*
+!outputs/.gitkeep
+cloud_outputs
+cloud_outputs/
+chart_exports/
+
+# Heavy experiment byproducts
+*.pt
+*.pth
+*.npz
+*.log
+failed_seeds.json
+failed_runs.json
+checkpoints/
+snapshots/
+traces/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
