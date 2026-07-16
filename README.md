@@ -105,6 +105,60 @@ See
 comparison contract, upstream provenance, expected memory requirements, and a
 fast wiring test.
 
+### GCP Batch smoke test for both VR algorithms
+
+The following one-seed smoke job runs all three experiment arms: the ESCHER
+baseline, VR-DeepDCFR+, and VR-DeepPDCFR+. It uses deliberately tiny buffers,
+traversal counts, and training-step counts to verify installation,
+orchestration, matched-node stopping, evaluation, plotting, and Cloud Storage
+upload. Its performance results are not scientifically meaningful.
+
+Push the current repository first so the Batch VM can clone it, then run this
+from the repository root:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west2"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_URL="https://github.com/lawrencewlcknight/leduc-poker-escher-architecture-experiments.git"
+
+JOB_NAME="escher-vr-matched-nodes-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.escher_vs_vr_deep_cfr_matched_nodes.run \
+    --seeds 0 \
+    --escher-iterations 2 \
+    --escher-traversals 2 \
+    --escher-value-traversals 2 \
+    --escher-evaluation-interval 1 \
+    --escher-policy-train-steps 1 \
+    --escher-regret-train-steps 1 \
+    --escher-value-train-steps 1 \
+    --escher-batch-size 2 \
+    --escher-memory-capacity 128 \
+    --vr-traversals 2 \
+    --vr-max-iterations 3 \
+    --vr-advantage-train-steps 1 \
+    --vr-policy-train-steps 1 \
+    --vr-baseline-train-steps 1 \
+    --vr-batch-size 2 \
+    --vr-buffer-size 128 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Monitor the job and download its outputs with:
+
+```bash
+gcloud batch jobs describe "$JOB_NAME" --location "$REGION"
+./gcp/read_batch_task_logs.sh "$JOB_NAME"
+gcloud storage cp --recursive \
+  "$BUCKET/$JOB_NAME/outputs" \
+  "cloud_outputs/$JOB_NAME/"
+```
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
