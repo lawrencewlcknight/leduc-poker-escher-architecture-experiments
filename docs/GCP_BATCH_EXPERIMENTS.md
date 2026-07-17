@@ -73,6 +73,62 @@ JOB_NAME="escher-architecture-exp28-$(date -u +%Y%m%d-%H%M%S)"
 Use the same resource specification for paired architecture runs unless resource
 scaling is itself part of the experiment.
 
+## Submit Experiment 2: five-times-longer matched-node comparison
+
+The measured Experiment 1 job ran for 5 hours 8 minutes. Its per-algorithm node
+rates project approximately 24 hours for the sequential 5x comparison. Use at
+least the configured 36-hour timeout (`129600` seconds):
+
+```bash
+JOB_NAME="leduc-escher-arch-exp2-5x-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.escher_vs_vr_deep_cfr_5x_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 129600 8000 32000 100
+```
+
+This experiment records zero-node evaluations for all algorithms and an extra
+VR evaluation just after 10,000 training nodes. Evaluation-tree nodes remain
+excluded from the matched training-node budget.
+
+### Experiment 2 cloud smoke test
+
+Use the same tiny training overrides as the local smoke test, and lower the VR
+threshold to 10 nodes so the early checkpoint is exercised:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp2-5x-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.escher_vs_vr_deep_cfr_5x_nodes.run \
+    --seeds 0 \
+    --escher-iterations 2 \
+    --escher-traversals 2 \
+    --escher-value-traversals 2 \
+    --escher-evaluation-interval 1 \
+    --escher-policy-train-steps 1 \
+    --escher-regret-train-steps 1 \
+    --escher-value-train-steps 1 \
+    --escher-batch-size 2 \
+    --escher-memory-capacity 128 \
+    --vr-traversals 2 \
+    --vr-max-iterations 3 \
+    --vr-advantage-train-steps 1 \
+    --vr-policy-train-steps 1 \
+    --vr-baseline-train-steps 1 \
+    --vr-batch-size 2 \
+    --vr-buffer-size 128 \
+    --vr-early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The smoke output should contain `initial_untrained_policy`,
+`early_node_threshold`, and `outer_iteration` rows for both VR algorithms.
+
 ## Monitor and inspect
 
 ```bash

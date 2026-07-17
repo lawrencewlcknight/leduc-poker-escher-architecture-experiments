@@ -387,6 +387,14 @@ def run_single_seed_variant(
         solver = make_escher_solver(game, config)
 
         start = time.time()
+        initial_eval = None
+        initial_eval_wall_clock = np.nan
+        if bool(config.get("evaluate_initial_policy", False)):
+            # ESCHER builds all networks during solver construction. Exact
+            # tabular evaluation therefore consumes no training samples and
+            # does not advance the solver's traversal RNG stream.
+            initial_eval = evaluate_final_policy(game, solver)
+            initial_eval_wall_clock = time.time() - start
         (
             _regret_losses,
             policy_loss,
@@ -398,6 +406,10 @@ def run_single_seed_variant(
         elapsed = time.time() - start
 
         final_eval = evaluate_final_policy(game, solver)
+        if initial_eval is not None:
+            # Include both added exact evaluations in Experiment 2's end-to-end
+            # timing; legacy experiments retain their existing timing contract.
+            elapsed = time.time() - start
 
         convs = safe_array(convs)
         nodes_touched = safe_array(nodes_touched)
@@ -417,10 +429,29 @@ def run_single_seed_variant(
             "wall_clock_seconds",
             np.asarray([], dtype=np.float64),
         ).astype(float)
-        final_nodes = (
-            float(nodes_touched[-1]) if nodes_touched.size else float(solver.get_num_nodes())
+        if initial_eval is not None:
+            wall_clock = wall_clock + float(initial_eval_wall_clock)
+        # The final iteration need not coincide with an intermediate checkpoint
+        # (Experiment 2 ends at iteration 404 with a 10-iteration interval).
+        # Use the solver's actual terminal node counter and end-to-end runtime
+        # for matched-budget stopping and the separately evaluated final policy.
+        final_nodes = float(solver.get_num_nodes())
+        final_wall_clock = (
+            float(wall_clock[-1])
+            if nodes_touched.size and nodes_touched[-1] == final_nodes
+            else float(elapsed)
         )
-        final_wall_clock = float(wall_clock[-1]) if wall_clock.size else float(elapsed)
+        analysis_nodes = nodes_touched
+        analysis_wall_clock = wall_clock
+        analysis_exploitability = intermediate_exploitability
+        if initial_eval is not None:
+            analysis_nodes = np.concatenate(([0.0], nodes_touched))
+            analysis_wall_clock = np.concatenate(
+                ([float(initial_eval_wall_clock)], wall_clock)
+            )
+            analysis_exploitability = np.concatenate(
+                ([float(initial_eval["final_exploitability"])], intermediate_exploitability)
+            )
 
         summary = {
             "variant_id": config["variant_id"],
@@ -440,34 +471,50 @@ def run_single_seed_variant(
             ),
             "policy_gradient_steps_expected": int(config["policy_gradient_steps_expected"]),
             "elapsed_seconds": float(elapsed),
-            "num_intermediate_points": int(intermediate_exploitability.size),
+            "evaluate_initial_policy": initial_eval is not None,
+            "initial_exploitability": (
+                float(initial_eval["final_exploitability"])
+                if initial_eval is not None
+                else np.nan
+            ),
+            "initial_policy_value": (
+                float(initial_eval["final_policy_value"])
+                if initial_eval is not None
+                else np.nan
+            ),
+            "initial_policy_value_error": (
+                float(initial_eval["final_policy_value_error"])
+                if initial_eval is not None
+                else np.nan
+            ),
+            "num_intermediate_points": int(analysis_exploitability.size),
             "intermediate_final_exploitability": (
                 float(intermediate_exploitability[-1])
                 if intermediate_exploitability.size
                 else np.nan
             ),
             "intermediate_best_exploitability": (
-                float(np.min(intermediate_exploitability))
-                if intermediate_exploitability.size
+                float(np.min(analysis_exploitability))
+                if analysis_exploitability.size
                 else np.nan
             ),
             "intermediate_final_window_mean_exploitability": final_window_mean(
-                intermediate_exploitability
+                analysis_exploitability
             ),
             "intermediate_exploitability_auc_nodes": auc(
-                nodes_touched, intermediate_exploitability
+                analysis_nodes, analysis_exploitability
             ),
             "intermediate_exploitability_normalised_auc_nodes": normalised_auc(
-                nodes_touched, intermediate_exploitability
+                analysis_nodes, analysis_exploitability
             ),
             "nodes_to_intermediate_exploitability_threshold": first_nodes_to_threshold(
-                nodes_touched,
-                intermediate_exploitability,
+                analysis_nodes,
+                analysis_exploitability,
                 config["exploitability_threshold"],
             ),
             "seconds_to_intermediate_exploitability_threshold": first_time_to_threshold(
-                wall_clock,
-                intermediate_exploitability,
+                analysis_wall_clock,
+                analysis_exploitability,
                 config["exploitability_threshold"],
             ),
             "final_nodes_touched": final_nodes,
@@ -575,6 +622,22 @@ def run_single_seed_variant(
                 summary[f"last_intermediate_{key}"] = np.nan
 
         curve_rows = []
+        if initial_eval is not None:
+            curve_rows.append({
+                "variant_id": config["variant_id"],
+                "variant_label": config["variant_label"],
+                "seed": int(seed),
+                "checkpoint_index": 0,
+                "iteration": 0,
+                "nodes_touched": 0.0,
+                "wall_clock_seconds": float(initial_eval_wall_clock),
+                "exploitability": float(initial_eval["final_exploitability"]),
+                "average_policy_value": float(initial_eval["final_policy_value"]),
+                "policy_value_error": float(initial_eval["final_policy_value_error"]),
+                "checkpoint_kind": "initial_untrained_policy",
+                "is_initial_policy_evaluation": True,
+                "is_final_policy_evaluation": False,
+            })
         if intermediate_exploitability.size:
             for idx, (iteration, node_count, wall_time, expl, value, value_err) in enumerate(
                 zip(
@@ -590,13 +653,15 @@ def run_single_seed_variant(
                     "variant_id": config["variant_id"],
                     "variant_label": config["variant_label"],
                     "seed": int(seed),
-                    "checkpoint_index": int(idx),
+                    "checkpoint_index": int(len(curve_rows)),
                     "iteration": int(iteration),
                     "nodes_touched": float(node_count),
                     "wall_clock_seconds": float(wall_time),
                     "exploitability": float(expl),
                     "average_policy_value": float(value),
                     "policy_value_error": float(value_err),
+                    "checkpoint_kind": "outer_iteration",
+                    "is_initial_policy_evaluation": False,
                     "is_final_policy_evaluation": False,
                 }
                 for key, arr in diagnostics.items():
@@ -615,6 +680,8 @@ def run_single_seed_variant(
             "exploitability": float(final_eval["final_exploitability"]),
             "average_policy_value": float(final_eval["final_policy_value"]),
             "policy_value_error": float(final_eval["final_policy_value_error"]),
+            "checkpoint_kind": "final_policy_evaluation",
+            "is_initial_policy_evaluation": False,
             "is_final_policy_evaluation": True,
         })
 

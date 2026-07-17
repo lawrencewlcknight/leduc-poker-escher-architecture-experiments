@@ -98,8 +98,11 @@ class DeepCumuAdv:
         self.target_nodes_touched = None
         self.max_num_iterations = None
         self.preserve_evaluation_rng = True
+        self.evaluate_initial_policy = False
+        self.early_evaluation_node_thresholds = ()
         self.checkpoint_rows = []
         self._solve_start_time = None
+        self._next_early_evaluation_index = 0
         self._last_average_policy_loss = np.nan
         set_seed(seed)
         self.init_ave_policy_trainer()
@@ -164,11 +167,17 @@ class DeepCumuAdv:
     def solve(self):
         """Train until the configured iteration cap or matched node budget.
 
-        Unlike the upstream entry point, this comparison runner does not create
-        a zero-node checkpoint.  ESCHER's first checkpoint follows training, so
-        omitting it gives both methods the same checkpoint semantics.
+        Optional initial and node-threshold checkpoints are evaluation-only:
+        they do not add training nodes and their RNG use is isolated from the
+        subsequent traversal stream.
         """
         self._solve_start_time = time.perf_counter()
+        self._prepare_early_evaluation_schedule()
+        if self.evaluate_initial_policy:
+            # The untrained average-policy head is zero-initialised, so this is
+            # the exact uniform-over-legal-actions policy. No replay fit is
+            # possible or necessary before the first training sample exists.
+            self.evaluate(checkpoint_kind="initial_untrained_policy")
         iteration_cap = self.num_iterations
         if self.max_num_iterations is not None:
             iteration_cap = min(iteration_cap, int(self.max_num_iterations))
@@ -182,7 +191,7 @@ class DeepCumuAdv:
         if not self.checkpoint_rows or (
             self.checkpoint_rows[-1]["nodes_touched"] != self.nodes_touched
         ):
-            self._run_checkpoint()
+            self._run_checkpoint(checkpoint_kind="final_node_budget")
         return list(self.checkpoint_rows)
 
     def iteration(self):
@@ -193,7 +202,37 @@ class DeepCumuAdv:
             if self.use_baseline:
                 self.train_baseline(player)
         if self.num_iteration % self.evaluation_frequency == 0:
-            self._run_checkpoint()
+            self._run_checkpoint(checkpoint_kind="outer_iteration")
+
+    def _prepare_early_evaluation_schedule(self):
+        thresholds = tuple(
+            sorted({int(value) for value in self.early_evaluation_node_thresholds})
+        )
+        if any(value <= 0 for value in thresholds):
+            raise ValueError("Early evaluation node thresholds must be positive.")
+        self.early_evaluation_node_thresholds = thresholds
+        self._next_early_evaluation_index = 0
+
+    def _maybe_run_early_node_checkpoint(self):
+        """Evaluate once a configured training-node threshold is crossed."""
+        while self._next_early_evaluation_index < len(
+            self.early_evaluation_node_thresholds
+        ):
+            threshold = self.early_evaluation_node_thresholds[
+                self._next_early_evaluation_index
+            ]
+            if self.nodes_touched < threshold:
+                return
+            self._next_early_evaluation_index += 1
+            if len(self.ave_policy_trainer.buffer) == 0:
+                # This can only occur for an unusually tiny threshold. Defer
+                # until a complete trajectory has supplied average-policy data.
+                self._next_early_evaluation_index -= 1
+                return
+            self._run_checkpoint(
+                checkpoint_kind="early_node_threshold",
+                checkpoint_target_nodes=threshold,
+            )
 
     def _capture_rng_state(self):
         state = {
@@ -212,12 +251,20 @@ class DeepCumuAdv:
         if "cuda" in state:
             torch.cuda.set_rng_state_all(state["cuda"])
 
-    def _run_checkpoint(self):
+    def _run_checkpoint(
+        self,
+        *,
+        checkpoint_kind="outer_iteration",
+        checkpoint_target_nodes=None,
+    ):
         """Fit/evaluate the average policy without perturbing training RNG."""
         rng_state = self._capture_rng_state() if self.preserve_evaluation_rng else None
         try:
             self.train_average_policy()
-            self.evaluate()
+            self.evaluate(
+                checkpoint_kind=checkpoint_kind,
+                checkpoint_target_nodes=checkpoint_target_nodes,
+            )
         finally:
             if rng_state is not None:
                 self._restore_rng_state(rng_state)
@@ -228,6 +275,7 @@ class DeepCumuAdv:
             self.episode += 1
             root_state = self.skip_chance_state(self.game.new_initial_state())
             self.dfs(root_state, player)
+            self._maybe_run_early_node_checkpoint()
 
     def train_regret(self, player):
         if self.reinitialize_advantage_networks:
@@ -252,10 +300,17 @@ class DeepCumuAdv:
         self.logger.record("average_policy_loss", ave_policy_loss)
         self.logger.info("average policy loss: {}".format(ave_policy_loss))
 
-    def evaluate(self):
+    def evaluate(
+        self,
+        *,
+        checkpoint_kind="outer_iteration",
+        checkpoint_target_nodes=None,
+    ):
         self.logger.record("nodes_touched", self.nodes_touched)
         self.logger.record("iteration", self.num_iteration)
         self.logger.record("episode", self.episode)
+        self.logger.record("checkpoint_kind", checkpoint_kind)
+        self.logger.record("checkpoint_target_nodes", checkpoint_target_nodes)
         if self.play_against_random:
             raise NotImplementedError(
                 "The thesis comparison supports exact Leduc evaluation only."
