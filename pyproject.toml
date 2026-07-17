@@ -11,6 +11,8 @@ requires-python = ">=3.9,<3.10"
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
+  "adaptive_escher",
+  "adaptive_escher.*",
   "escher_poker",
   "escher_poker.*",
   "experiments",
@@ -24,6 +26,12 @@ exclude = [
   "thesis_artifacts*",
   "gcp*",
   "tests*",
+]
+
+[tool.setuptools.package-data]
+"experiments.leduc_poker.adaptive_residual_predictive_escher" = [
+  "README.md",
+  "experiment1_checkpoint_curves.csv",
 ]
 
 [tool.ruff]

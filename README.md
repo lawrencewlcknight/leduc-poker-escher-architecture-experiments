@@ -37,6 +37,7 @@ experiments/leduc_poker/
   escher_candidate_architecture_multiseed/  Experiment 28 baseline
   escher_vs_vr_deep_cfr_matched_nodes/      Three-seed matched-node comparison
   escher_vs_vr_deep_cfr_5x_nodes/           Five-times-longer comparison
+  adaptive_residual_predictive_escher/      Experiment 3 adaptive architecture
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -119,6 +120,83 @@ python -m experiments.leduc_poker.escher_vs_vr_deep_cfr_5x_nodes.run
 
 The complete protocol and 36-hour GCP Batch command are in
 `experiments/leduc_poker/escher_vs_vr_deep_cfr_5x_nodes/README.md`.
+
+## Run Experiment 3: adaptive residual-corrected predictive ESCHER
+
+Experiment 3 trains only the new adaptive architecture to the three paired
+Experiment 1 ESCHER node budgets. It reuses a provenance-recorded copy of the
+Experiment 1 checkpoint curves to produce a four-algorithm exploitability chart
+without rerunning ESCHER, VR-DeepDCFR+, or VR-DeepPDCFR+:
+
+```bash
+python -m experiments.leduc_poker.adaptive_residual_predictive_escher.run
+```
+
+The architecture, convergence argument, exact configuration, diagnostic
+invariants, local smoke test, and GCP Batch commands are documented in
+`experiments/leduc_poker/adaptive_residual_predictive_escher/README.md`.
+
+### Experiment 3 local smoke test
+
+This one-seed, two-iteration run verifies the adaptive estimator, initial and
+early evaluation checkpoints, Experiment 1 reference-data merge, CSV exports,
+and comparison plots. Its performance metrics have no scientific meaning.
+
+```bash
+python -m experiments.leduc_poker.adaptive_residual_predictive_escher.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 3 GCP Batch smoke test
+
+Set the Batch environment variables, then submit the same reduced run from the
+repository root:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_URL="https://github.com/lawrencewlcknight/leduc-poker-escher-architecture-experiments.git"
+
+JOB_NAME="leduc-escher-arch-exp3-adaptive-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.adaptive_residual_predictive_escher.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Monitor the job and download its artifacts with:
+
+```bash
+gcloud batch jobs describe "$JOB_NAME" --location "$REGION"
+./gcp/read_batch_task_logs.sh "$JOB_NAME"
+gcloud storage cp --recursive \
+  "$BUCKET/$JOB_NAME/outputs" \
+  "cloud_outputs/$JOB_NAME/"
+```
 
 ### Full Experiment 2 GCP Batch job
 
