@@ -17,6 +17,8 @@ include = [
   "escher_poker.*",
   "experiments",
   "experiments.*",
+  "unbiased_escher",
+  "unbiased_escher.*",
   "vr_deep_cfr",
   "vr_deep_cfr.*",
 ]
@@ -36,6 +38,12 @@ exclude = [
 "experiments.leduc_poker.adaptive_residual_predictive_escher_5x_nodes" = [
   "README.md",
   "experiment2_checkpoint_curves.csv",
+]
+"experiments.leduc_poker.adaptive_residual_predictive_escher_forensics" = [
+  "README.md",
+]
+"experiments.leduc_poker.unbiased_control_variate_escher_5x_nodes" = [
+  "README.md",
 ]
 
 [tool.ruff]

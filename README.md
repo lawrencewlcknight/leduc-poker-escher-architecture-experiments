@@ -33,12 +33,15 @@ baseline drift.
 
 ```text
 escher_poker/                         Shared solver, networks, metrics, and plots
+unbiased_escher/                      Experiment 6 architecture implementation
 experiments/leduc_poker/
   escher_candidate_architecture_multiseed/  Experiment 28 baseline
   escher_vs_vr_deep_cfr_matched_nodes/      Three-seed matched-node comparison
   escher_vs_vr_deep_cfr_5x_nodes/           Five-times-longer comparison
   adaptive_residual_predictive_escher/      Experiment 3 adaptive architecture
   adaptive_residual_predictive_escher_5x_nodes/  Experiment 4 long adaptive run
+  adaptive_residual_predictive_escher_forensics/ Experiment 5 diagnostics
+  unbiased_control_variate_escher_5x_nodes/ Experiment 6 unbiased architecture
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -368,6 +371,127 @@ JOB_NAME="leduc-escher-arch-exp4-adaptive-5x-smoke-$(date -u +%Y%m%d-%H%M%S)"
 The complete provenance contract, projected runtime, 18-hour full Batch job,
 monitoring commands, and output inventory are in
 `experiments/leduc_poker/adaptive_residual_predictive_escher_5x_nodes/README.md`.
+
+## Run Experiment 5: adaptive-ESCHER forensic diagnostics
+
+Experiment 5 runs six one-factor architectural-mechanism arms for seeds `0`,
+`1`, and `2` at their paired Experiment 1 node budgets (approximately one
+million nodes per run). It separates the current regret-matched strategy, an
+exact tabular weighted average, and the learned average-policy network; it also
+measures exact all-action Q error, estimator bias and variance, and predictor
+error against predictive-strategy improvement.
+
+```bash
+python -m experiments.leduc_poker.adaptive_residual_predictive_escher_forensics.run
+```
+
+### Experiment 5 local smoke test
+
+This executes all six mechanism branches for one seed:
+
+```bash
+python -m experiments.leduc_poker.adaptive_residual_predictive_escher_forensics.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 5 GCP Batch smoke test
+
+Use the environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp5-forensics-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.adaptive_residual_predictive_escher_forensics.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The full 18-run job is expected to take about 12 hours sequentially and uses a
+24-hour Batch timeout. The full submission command, diagnostic definitions,
+interpretation guide, monitoring commands, and output inventory are in
+`experiments/leduc_poker/adaptive_residual_predictive_escher_forensics/README.md`.
+
+## Run Experiment 6: unbiased control-variate ESCHER
+
+Experiment 6 trains the always-unbiased, three-fold cross-fitted
+control-variate architecture for seeds `0`, `1`, and `2` to the exact paired
+Experiment 2 ESCHER node budgets. It reuses the saved Experiment 2 ESCHER,
+VR-DeepDCFR+, and VR-DeepPDCFR+ curves and produces a single four-algorithm
+exploitability-by-nodes chart.
+
+```bash
+python -m experiments.leduc_poker.unbiased_control_variate_escher_5x_nodes.run
+```
+
+### Experiment 6 local smoke test
+
+```bash
+python -m experiments.leduc_poker.unbiased_control_variate_escher_5x_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 6 GCP Batch smoke test
+
+Use the environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp6-unbiased-cv-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_control_variate_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The full job is projected to take about 14 hours sequentially and is configured
+with a 36-hour Batch timeout. The proof sketch, cross-fitting contract, full
+Batch command, provenance, diagnostics, and output inventory are in
+`experiments/leduc_poker/unbiased_control_variate_escher_5x_nodes/README.md`.
 
 ## Add an architecture experiment
 

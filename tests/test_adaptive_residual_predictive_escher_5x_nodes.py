@@ -98,6 +98,8 @@ def test_root_readme_keeps_experiment_smoke_tests_in_numerical_order():
         "## Run Experiment 2:",
         "## Run Experiment 3:",
         "## Run Experiment 4:",
+        "## Run Experiment 5:",
+        "## Run Experiment 6:",
         "## Add an architecture experiment",
     ]
     offsets = [readme.index(heading) for heading in headings]
@@ -108,9 +110,15 @@ def test_root_readme_keeps_experiment_smoke_tests_in_numerical_order():
         "leduc-escher-arch-exp2-5x-smoke",
         "leduc-escher-arch-exp3-adaptive-smoke",
         "leduc-escher-arch-exp4-adaptive-5x-smoke",
+        "leduc-escher-arch-exp5-forensics-smoke",
+        "leduc-escher-arch-exp6-unbiased-cv-smoke",
     ]
     for index, smoke_job in enumerate(expected_smoke_jobs):
         section = readme[offsets[index] : offsets[index + 1]]
         assert smoke_job in section
     assert "### Experiment 4 local smoke test" in readme
     assert "### Experiment 4 GCP Batch smoke test" in readme
+    assert "### Experiment 5 local smoke test" in readme
+    assert "### Experiment 5 GCP Batch smoke test" in readme
+    assert "### Experiment 6 local smoke test" in readme
+    assert "### Experiment 6 GCP Batch smoke test" in readme
