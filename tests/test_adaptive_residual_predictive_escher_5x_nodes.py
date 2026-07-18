@@ -90,3 +90,27 @@ def test_experiment_2_provenance_and_experiment_4_commands_are_documented():
     assert REFERENCE_CURVES_SHA256 in experiment_readme
     assert "n2-standard-8 64800 8000 32000 100" in experiment_readme
 
+
+def test_root_readme_keeps_experiment_smoke_tests_in_numerical_order():
+    readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
+    headings = [
+        "## Run Experiment 1:",
+        "## Run Experiment 2:",
+        "## Run Experiment 3:",
+        "## Run Experiment 4:",
+        "## Add an architecture experiment",
+    ]
+    offsets = [readme.index(heading) for heading in headings]
+    assert offsets == sorted(offsets)
+
+    expected_smoke_jobs = [
+        "escher-vr-matched-nodes-smoke",
+        "leduc-escher-arch-exp2-5x-smoke",
+        "leduc-escher-arch-exp3-adaptive-smoke",
+        "leduc-escher-arch-exp4-adaptive-5x-smoke",
+    ]
+    for index, smoke_job in enumerate(expected_smoke_jobs):
+        section = readme[offsets[index] : offsets[index + 1]]
+        assert smoke_job in section
+    assert "### Experiment 4 local smoke test" in readme
+    assert "### Experiment 4 GCP Batch smoke test" in readme
