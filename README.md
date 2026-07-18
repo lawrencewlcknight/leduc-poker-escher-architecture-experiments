@@ -38,6 +38,7 @@ experiments/leduc_poker/
   escher_vs_vr_deep_cfr_matched_nodes/      Three-seed matched-node comparison
   escher_vs_vr_deep_cfr_5x_nodes/           Five-times-longer comparison
   adaptive_residual_predictive_escher/      Experiment 3 adaptive architecture
+  adaptive_residual_predictive_escher_5x_nodes/  Experiment 4 long adaptive run
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -197,6 +198,61 @@ gcloud storage cp --recursive \
   "$BUCKET/$JOB_NAME/outputs" \
   "cloud_outputs/$JOB_NAME/"
 ```
+
+## Run Experiment 4: adaptive architecture at Experiment 2 node budgets
+
+Experiment 4 changes only the training horizon of the Experiment 3 adaptive
+architecture. It trains seeds `0`, `1`, and `2` to the paired Experiment 2
+ESCHER node totals (approximately 4.7 million nodes each), then combines the
+new curves with the immutable saved Experiment 2 ESCHER, VR-DeepDCFR+, and
+VR-DeepPDCFR+ curves:
+
+```bash
+python -m experiments.leduc_poker.adaptive_residual_predictive_escher_5x_nodes.run
+```
+
+Fast local smoke test:
+
+```bash
+python -m experiments.leduc_poker.adaptive_residual_predictive_escher_5x_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+GCP Batch smoke test, using the environment variables defined above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp4-adaptive-5x-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.adaptive_residual_predictive_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The complete provenance contract, projected runtime, 18-hour full Batch job,
+monitoring commands, and output inventory are in
+`experiments/leduc_poker/adaptive_residual_predictive_escher_5x_nodes/README.md`.
 
 ### Full Experiment 2 GCP Batch job
 
