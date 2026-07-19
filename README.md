@@ -42,6 +42,12 @@ experiments/leduc_poker/
   adaptive_residual_predictive_escher_5x_nodes/  Experiment 4 long adaptive run
   adaptive_residual_predictive_escher_forensics/ Experiment 5 diagnostics
   unbiased_control_variate_escher_5x_nodes/ Experiment 6 unbiased architecture
+  unbiased_escher_vs_vr_deep_cfr_15m_nodes/ Experiment 7 15M-node comparison
+  unbiased_control_variate_escher_lean_ablation/ Experiment 8 lean ablation
+  fast_slow_control_critic_escher_5x_nodes/ Experiment 9 fast/slow critic
+  monte_carlo_control_critic_escher_5x_nodes/ Experiment 10 direct MC critic
+  advantage_variance_sampling_escher_5x_nodes/ Experiment 11 advantage sampler
+  parallel_multi_action_residual_escher_5x_nodes/ Experiment 12 action subsets
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -492,6 +498,483 @@ The full job is projected to take about 14 hours sequentially and is configured
 with a 36-hour Batch timeout. The proof sketch, cross-fitting contract, full
 Batch command, provenance, diagnostics, and output inventory are in
 `experiments/leduc_poker/unbiased_control_variate_escher_5x_nodes/README.md`.
+
+## Experiments 7–12: single-Batch schedule
+
+The recommended workflow is one complete GCP Batch job per experiment. The
+default runner for each row executes every algorithm or architecture arm and
+all three seeds sequentially inside that one job, then produces the combined
+outputs before the job exits.
+
+| Experiment | Work inside one Batch job | Best completion estimate | Planning allowance | Set Batch maximum to |
+|---|---|---:|---:|---:|
+| 7 | 3 algorithms × 3 seeds at 15M nodes | 64.5 hours | 78 hours | **5,760 minutes** |
+| 8 | 8 ablation arms × 3 seeds | 72 hours | 72 hours | **5,760 minutes** |
+| 9 | Fast/slow critic × 3 seeds | 24 hours | 24 hours | **2,880 minutes** |
+| 10 | Monte Carlo critic × 3 seeds | 12 hours | 12 hours | **1,440 minutes** |
+| 11 | Advantage sampler × 3 seeds | 12 hours | 12 hours | **1,440 minutes** |
+| 12 | Parallel multi-action candidate × 3 seeds | 12 hours | 12 hours | **1,440 minutes** |
+
+The maximum is deliberately larger than the expected duration; a successful
+job stops as soon as the runner completes. The Batch submission helper accepts
+seconds, so the corresponding arguments are `345600`, `345600`, `172800`,
+`86400`, `86400`, and `86400`. Every smoke test below is also a single Batch
+job. Use its documented `21600`-second (**360-minute**) timeout.
+
+The full single-job submissions are:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp7-15m-$(date -u +%Y%m%d-%H%M%S)"
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_escher_vs_vr_deep_cfr_15m_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 345600 8000 32000 100
+
+JOB_NAME="leduc-escher-arch-exp8-lean-$(date -u +%Y%m%d-%H%M%S)"
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_control_variate_escher_lean_ablation.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 345600 8000 32000 100
+
+JOB_NAME="leduc-escher-arch-exp9-fast-slow-$(date -u +%Y%m%d-%H%M%S)"
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fast_slow_control_critic_escher_5x_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 172800 8000 32000 100
+
+JOB_NAME="leduc-escher-arch-exp10-mc-critic-$(date -u +%Y%m%d-%H%M%S)"
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.monte_carlo_control_critic_escher_5x_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 86400 8000 32000 100
+
+JOB_NAME="leduc-escher-arch-exp11-adv-sampling-$(date -u +%Y%m%d-%H%M%S)"
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.advantage_variance_sampling_escher_5x_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 86400 8000 32000 100
+
+JOB_NAME="leduc-escher-arch-exp12-multi-action-$(date -u +%Y%m%d-%H%M%S)"
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.parallel_multi_action_residual_escher_5x_nodes.run \
+    --parallel-action-workers 3 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 86400 8000 32000 100
+```
+
+Run the relevant smoke job first. Experiments 7 and 8 also support split-job
+recovery, but no splitting is required for the single-Batch workflow above.
+
+## Run Experiment 7: 15-million-node long-horizon comparison
+
+Experiment 7 trains VR-DeepDCFR+, VR-DeepPDCFR+, and the Experiment 6 Unbiased
+Control-Variate ESCHER candidate for seeds `0`, `1`, and `2` to a common target
+of approximately 15 million training nodes:
+
+```bash
+python -m experiments.leduc_poker.unbiased_escher_vs_vr_deep_cfr_15m_nodes.run
+```
+
+The measured-throughput estimate is approximately 64.5 hours for all nine runs.
+For the requested single-Batch workflow, allow 78 hours operationally and set
+the maximum to **5,760 minutes** (`345600` seconds). The runner also supports
+partial-job recovery, but the default command completes and aggregates all nine
+runs in one job.
+
+### Experiment 7 local smoke test
+
+```bash
+python -m experiments.leduc_poker.unbiased_escher_vs_vr_deep_cfr_15m_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 7 GCP Batch smoke test
+
+Use the GCP environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp7-15m-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_escher_vs_vr_deep_cfr_15m_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The full sequential Batch command, parallel-by-algorithm commands, aggregation
+workflow, runtime derivation, configuration contract, and output inventory are
+in
+`experiments/leduc_poker/unbiased_escher_vs_vr_deep_cfr_15m_nodes/README.md`.
+
+## Run Experiment 8: lean Experiment 6 ablation
+
+Experiment 8 runs the full Experiment 6 architecture and seven simplification
+arms for paired seeds `0`, `1`, and `2` at the Experiment 6 per-seed node
+budgets. It isolates fixed beta, predictor use and removal, critic count, and
+sampling, then directly tests the combined lean candidate: beta-one unbiased
+residual correction, two cross-fitted critics, non-predictive DCFR+, uniform
+sampling, and no calibration network.
+
+```bash
+python -m experiments.leduc_poker.unbiased_control_variate_escher_lean_ablation.run
+```
+
+### Experiment 8 local smoke test
+
+```bash
+python -m experiments.leduc_poker.unbiased_control_variate_escher_lean_ablation.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 8 GCP Batch smoke test
+
+Use the GCP environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp8-lean-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_control_variate_escher_lean_ablation.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The complete 24-run job is estimated at about 72 hours. For the requested
+single-Batch workflow, set the maximum to **5,760 minutes** (`345600` seconds).
+Optional split-job recovery, the proof rationale, interpretation rule and
+output inventory are in
+`experiments/leduc_poker/unbiased_control_variate_escher_lean_ablation/README.md`.
+
+## Run Experiment 9: fast/slow cross-fitted control critic
+
+Experiment 9 replaces Experiment 6's single-timescale critic folds with paired
+fast and slow critics. Fast replay contains only the current outer iteration;
+slow replay is a uniform lifetime reservoir. A frozen held-out controller
+selects an information-set/action-conditioned convex mixture before each
+return is observed. The unbiased residual correction is unchanged.
+
+The new architecture runs seeds `0`, `1`, and `2` to the Experiment 6 paired
+node budgets and automatically adds checksum-validated Experiment 6 results to
+the performance charts.
+
+```bash
+python -m experiments.leduc_poker.fast_slow_control_critic_escher_5x_nodes.run
+```
+
+### Experiment 9 local smoke test
+
+```bash
+python -m experiments.leduc_poker.fast_slow_control_critic_escher_5x_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --fast-q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --rho-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --fast-q-buffer-size 128 \
+  --rho-buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 9 GCP Batch smoke test
+
+Use the GCP environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp9-fast-slow-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fast_slow_control_critic_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --fast-q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --rho-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --fast-q-buffer-size 128 \
+    --rho-buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Allow approximately 24 hours for the complete three-seed run and set the
+single-Batch maximum to **2,880 minutes** (`172800` seconds). The proof
+argument, exact replay semantics,
+Experiment 6 checksums, full Batch command, diagnostics and output inventory
+are in
+`experiments/leduc_poker/fast_slow_control_critic_escher_5x_nodes/README.md`.
+
+## Run Experiment 10: current-iteration Monte Carlo control critic
+
+Experiment 10 replaces Experiment 6's bootstrapped TD critic with direct
+supervision from the recursively unbiased sampled returns generated during
+traversal. Both players collect against one frozen strategy before any regret,
+critic, calibration or gate update. Each trajectory writes returns to one
+critic fold and uses predictions only from the other folds.
+
+Seeds `0`, `1`, and `2` run to the Experiment 6 paired node budgets, and
+checksum-validated Experiment 6 results are automatically included in the
+performance charts.
+
+```bash
+python -m experiments.leduc_poker.monte_carlo_control_critic_escher_5x_nodes.run
+```
+
+### Experiment 10 local smoke test
+
+```bash
+python -m experiments.leduc_poker.monte_carlo_control_critic_escher_5x_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 10 GCP Batch smoke test
+
+Use the GCP environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp10-mc-critic-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.monte_carlo_control_critic_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Allow approximately 12 hours for the complete three-seed experiment and set
+the single-Batch maximum to **1,440 minutes** (`86400` seconds). The
+frozen-phase contract, unbiasedness proof,
+parallelisation properties, Experiment 6 checksums, full Batch command,
+diagnostics and output inventory are in
+`experiments/leduc_poker/monte_carlo_control_critic_escher_5x_nodes/README.md`.
+
+## Run Experiment 11: centred-advantage variance sampling
+
+Experiment 11 retains the complete Experiment 6 architecture but replaces its
+residual-standard-deviation action proposal with one aligned to the Euclidean
+variance of the centred advantage vector. The score for each action combines
+the predicted second moment of `G - beta * Q`, the current strategy, and the
+exact norm of that action's column in the policy-centering operator. The
+unchanged uniform floor and exact importance correction preserve full support
+and unbiasedness.
+
+Seeds `0`, `1`, and `2` run to the exact Experiment 6 node budgets. Immutable,
+checksum-validated Experiment 6 results are automatically included in the
+performance charts.
+
+```bash
+python -m experiments.leduc_poker.advantage_variance_sampling_escher_5x_nodes.run
+```
+
+### Experiment 11 local smoke test
+
+```bash
+python -m experiments.leduc_poker.advantage_variance_sampling_escher_5x_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 11 GCP Batch smoke test
+
+Use the GCP environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp11-adv-sampling-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.advantage_variance_sampling_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Allow approximately 12 hours for the complete three-seed experiment and set
+the single-Batch maximum to **1,440 minutes** (`86400` seconds). The full Batch
+command, derivation,
+unbiasedness argument, Experiment 6 checksums, diagnostics and output inventory
+are in
+`experiments/leduc_poker/advantage_variance_sampling_escher_5x_nodes/README.md`.
+
+## Run Experiment 12: parallel multi-action residual correction
+
+Experiment 12 retains Experiment 6's critic, calibration, beta, regret
+accumulator and average-policy architecture. At traverser information sets it
+replaces the single sampled action with an adaptive nonempty subset. Exact
+conditional inclusion probabilities preserve unbiasedness, while sibling
+actions share coupled chance/opponent random streams and the first
+multi-action frontier executes on three workers.
+
+Seeds `0`, `1`, and `2` run to the exact Experiment 6 node budgets. Immutable,
+checksum-validated Experiment 6 results are automatically included in all
+performance charts.
+
+```bash
+python -m experiments.leduc_poker.parallel_multi_action_residual_escher_5x_nodes.run
+```
+
+### Experiment 12 local smoke test
+
+```bash
+python -m experiments.leduc_poker.parallel_multi_action_residual_escher_5x_nodes.run \
+  --seeds 0 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 256 \
+  --subset-rollout-cost-scale 2.0 \
+  --parallel-action-workers 3 \
+  --early-evaluation-nodes 10 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 12 GCP Batch smoke test
+
+Use the GCP environment variables defined in the Experiment 3 section above:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp12-multi-action-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.parallel_multi_action_residual_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 256 \
+    --subset-rollout-cost-scale 2.0 \
+    --parallel-action-workers 3 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Allow approximately 12 hours for the three-seed job and set the single-Batch
+maximum to **1,440 minutes** (`86400` seconds). The exact inclusion derivation,
+common-random-number contract,
+parallel event-merging design, full Batch command, Experiment 6 checksums and
+output inventory are in
+`experiments/leduc_poker/parallel_multi_action_residual_escher_5x_nodes/README.md`.
 
 ## Add an architecture experiment
 

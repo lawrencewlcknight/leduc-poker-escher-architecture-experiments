@@ -13,7 +13,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from adaptive_escher.solver import PersistentFrozenTargetQValueTrainer
-from vr_deep_cfr.variants import VRDeepPDCFRPlus, VRPDCFRPlusRegretTrainer
+from vr_deep_cfr.variants import (
+    VRDCFRPlusRegretTrainer,
+    VRDeepPDCFRPlus,
+    VRPDCFRPlusRegretTrainer,
+)
 
 from .estimator import (
     control_variate_advantage,
@@ -27,6 +31,7 @@ class GatedPredictiveRegretTrainer(VRPDCFRPlusRegretTrainer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.predictor_enabled = True
         self.prediction_gate = 0.0
 
     def set_prediction_gate(self, value: float) -> None:
@@ -127,20 +132,23 @@ class CrossFittedQMember(PersistentFrozenTargetQValueTrainer):
                 ),
                 min=0.0,
             )
-            immediate = trainer.predict(
-                trainer.imm_model,
-                next_states,
-                next_legal_actions_mask,
-            )
-            age = math.pow(max(iteration - 1, 0), trainer.alpha)
-            optimistic = torch.clamp(
-                cumulative * age / (age + 1.0) + immediate,
-                min=0.0,
-            )
-            scores = (
-                (1.0 - trainer.prediction_gate) * cumulative
-                + trainer.prediction_gate * optimistic
-            )
+            if getattr(trainer, "predictor_enabled", False):
+                immediate = trainer.predict(
+                    trainer.imm_model,
+                    next_states,
+                    next_legal_actions_mask,
+                )
+                age = math.pow(max(iteration - 1, 0), trainer.alpha)
+                optimistic = torch.clamp(
+                    cumulative * age / (age + 1.0) + immediate,
+                    min=0.0,
+                )
+                scores = (
+                    (1.0 - trainer.prediction_gate) * cumulative
+                    + trainer.prediction_gate * optimistic
+                )
+            else:
+                scores = cumulative
             scores *= next_legal_actions_mask
             positive_sum = scores.sum(dim=1, keepdim=True)
             normalised = scores / torch.clamp(positive_sum, min=1e-12)
@@ -183,8 +191,8 @@ class CrossFittedQEnsemble:
         device: str,
         gradient_clip_norm: float,
     ):
-        if ensemble_size < 2:
-            raise ValueError("Cross-fitted inference requires at least two critics")
+        if ensemble_size < 1:
+            raise ValueError("At least one critic is required")
         self.ensemble_size = int(ensemble_size)
         member_buffer_size = max(1, int(total_buffer_size) // self.ensemble_size)
         self.members = [
@@ -217,6 +225,11 @@ class CrossFittedQEnsemble:
         return self.active_fold
 
     def heldout_member_indices(self) -> List[int]:
+        if self.ensemble_size == 1:
+            # This arm deliberately removes cross-fitting. The persistent target
+            # remains frozen during each outer iteration, so inference is still
+            # predictable even though it is no longer fold-independent.
+            return [0]
         return [
             index
             for index in range(self.ensemble_size)
@@ -433,6 +446,10 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         prediction_gate_ema_decay: float = 0.9,
         prediction_gate_initial: float = 0.0,
         q_gradient_clip_norm: float = 10.0,
+        fixed_control_variate_beta: float | None = None,
+        force_prediction_gate_zero: bool = False,
+        use_instantaneous_predictor: bool = True,
+        use_residual_calibration: bool = True,
         **kwargs,
     ):
         self.q_ensemble_size = int(q_ensemble_size)
@@ -448,20 +465,39 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         self.prediction_gate_ema_decay = float(prediction_gate_ema_decay)
         self.prediction_gate_initial = float(prediction_gate_initial)
         self.q_gradient_clip_norm = float(q_gradient_clip_norm)
+        self.fixed_control_variate_beta = (
+            None
+            if fixed_control_variate_beta is None
+            else float(fixed_control_variate_beta)
+        )
+        self.force_prediction_gate_zero = bool(force_prediction_gate_zero)
+        self.use_instantaneous_predictor = bool(use_instantaneous_predictor)
+        self.use_residual_calibration = bool(use_residual_calibration)
         super().__init__(*args, **kwargs)
         if not self.use_baseline or not self.fit_advantage:
             raise ValueError("The unbiased architecture requires Q and advantages")
-        self.calibration_trainer = ResidualCalibrationTrainer(
-            infostate_size=self.infostate_size,
-            action_size=self.action_size,
-            hidden_layers=self.network_layers,
-            learning_rate=self.calibration_learning_rate,
-            buffer_size=self.calibration_buffer_size,
-            batch_size=self.calibration_batch_size,
-            train_steps=self.calibration_train_steps,
-            device=self.device,
-            minimum_variance=self.calibration_minimum_variance,
-        )
+        if not self.use_residual_calibration:
+            if self.fixed_control_variate_beta is None:
+                raise ValueError(
+                    "Disabling residual calibration requires a fixed control-variate beta"
+                )
+            if self.sampling_uniform_floor_mass != 1.0:
+                raise ValueError(
+                    "Disabling residual calibration requires uniform full-support sampling"
+                )
+            self.calibration_trainer = None
+        else:
+            self.calibration_trainer = ResidualCalibrationTrainer(
+                infostate_size=self.infostate_size,
+                action_size=self.action_size,
+                hidden_layers=self.network_layers,
+                learning_rate=self.calibration_learning_rate,
+                buffer_size=self.calibration_buffer_size,
+                batch_size=self.calibration_batch_size,
+                train_steps=self.calibration_train_steps,
+                device=self.device,
+                minimum_variance=self.calibration_minimum_variance,
+            )
         self.gate_controller = PredictorGateController(
             self.num_players,
             ema_decay=self.prediction_gate_ema_decay,
@@ -470,23 +506,43 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         self._reset_architecture_diagnostics()
 
     def init_regret_trainers(self):
-        self.regret_trainers = [
-            GatedPredictiveRegretTrainer(
-                self.infostate_size,
-                self.action_size,
-                self.network_layers,
-                self.learning_rate,
-                self.advantage_buffer_size,
-                self.advantage_batch_size,
-                self.advantage_network_train_steps,
-                self.logger,
-                self.reinitialize_imm_regret_networks,
-                self.use_regret_matching_argmax,
-                self.device,
-                self.alpha,
-            )
-            for _ in range(self.num_players)
-        ]
+        if self.use_instantaneous_predictor:
+            self.regret_trainers = [
+                GatedPredictiveRegretTrainer(
+                    self.infostate_size,
+                    self.action_size,
+                    self.network_layers,
+                    self.learning_rate,
+                    self.advantage_buffer_size,
+                    self.advantage_batch_size,
+                    self.advantage_network_train_steps,
+                    self.logger,
+                    self.reinitialize_imm_regret_networks,
+                    self.use_regret_matching_argmax,
+                    self.device,
+                    self.alpha,
+                )
+                for _ in range(self.num_players)
+            ]
+        else:
+            self.regret_trainers = [
+                VRDCFRPlusRegretTrainer(
+                    self.infostate_size,
+                    self.action_size,
+                    self.network_layers,
+                    self.learning_rate,
+                    self.advantage_buffer_size,
+                    self.advantage_batch_size,
+                    self.advantage_network_train_steps,
+                    self.logger,
+                    self.use_regret_matching_argmax,
+                    self.device,
+                    self.alpha,
+                )
+                for _ in range(self.num_players)
+            ]
+            for trainer in self.regret_trainers:
+                trainer.predictor_enabled = False
 
     def init_q_value_trainer(self):
         root_state = self.game.new_initial_state()
@@ -529,6 +585,8 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
 
     def _predictor_holdout_error(self, player: int):
         trainer = self.regret_trainers[player]
+        if not getattr(trainer, "predictor_enabled", False):
+            return np.nan, np.nan
         if len(trainer.buffer) == 0:
             return np.nan, np.nan
         infostates, targets, legal_mask, _ = trainer.buffer.sample(-1)
@@ -554,9 +612,13 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         self._reset_architecture_diagnostics()
         self.num_iteration += 1
         for player in range(self.num_players):
-            self.regret_trainers[player].set_prediction_gate(
-                self.gate_controller.value(player)
-            )
+            trainer = self.regret_trainers[player]
+            if getattr(trainer, "predictor_enabled", False):
+                trainer.set_prediction_gate(
+                    0.0
+                    if self.force_prediction_gate_zero
+                    else self.gate_controller.value(player)
+                )
         holdout_errors = []
         for player in range(self.num_players):
             self.collect_training_data(player)
@@ -564,9 +626,15 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
             self.train_regret(player)
         for player, (prediction_mse, zero_mse) in enumerate(holdout_errors):
             self.gate_controller.observe(player, prediction_mse, zero_mse)
+            if self.force_prediction_gate_zero or not self.use_instantaneous_predictor:
+                self.gate_controller.gates[player] = 0.0
             self.logger.record(f"predictor_holdout_mse_player_{player}", prediction_mse)
             self.logger.record(f"predictor_zero_mse_player_{player}", zero_mse)
-        calibration_loss = self.calibration_trainer.train_model()
+        calibration_loss = (
+            self.calibration_trainer.train_model()
+            if self.calibration_trainer is not None
+            else None
+        )
         self.logger.record("calibration_loss", calibration_loss)
         q_loss = self.q_value_trainer.train_model(self.num_iteration)
         if q_loss is not None:
@@ -639,7 +707,11 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         )
         self.logger.record(
             "calibration_target_version",
-            self.calibration_trainer.target_version,
+            (
+                self.calibration_trainer.target_version
+                if self.calibration_trainer is not None
+                else 0
+            ),
         )
         versions = [member.target_version for member in self.q_value_trainer.members]
         self.logger.record("q_ensemble_target_version_min", min(versions))
@@ -647,9 +719,10 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         for fold, size in enumerate(self.q_value_trainer.fold_sizes()):
             self.logger.record(f"q_fold_{fold}_replay_size", size)
         for player in range(self.num_players):
+            trainer = self.regret_trainers[player]
             self.logger.record(
                 f"prediction_gate_player_{player}",
-                self.regret_trainers[player].prediction_gate,
+                float(getattr(trainer, "prediction_gate", 0.0)),
             )
             self.logger.record(
                 f"prediction_gate_next_player_{player}",
@@ -660,6 +733,30 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
                 self.gate_controller.relative_skill[player],
             )
         return super().evaluate(**kwargs)
+
+    def _traverser_sampling_policy(
+        self,
+        *,
+        q_values,
+        beta,
+        residual_means,
+        predicted_variances,
+        policy,
+        legal_mask,
+    ) -> np.ndarray:
+        """Experiment 6's residual-standard-deviation sampling rule.
+
+        Subclasses may replace the predictable proposal while retaining the
+        common full-support importance correction in ``dfs``.
+        """
+
+        del q_values, beta, residual_means, policy
+        return residual_adaptive_sampling_policy(
+            predicted_variances,
+            legal_mask,
+            uniform_floor_mass=self.sampling_uniform_floor_mass,
+            minimum_variance=self.calibration_minimum_variance,
+        )
 
     def dfs(
         self,
@@ -684,27 +781,41 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
             traverser,
         )
         infostate = state.information_state_tensor(traverser)
-        residual_means, predicted_variances, calibration_features = (
-            self.calibration_trainer.predict_all(
-                infostate,
-                self.num_iteration,
-                disagreement,
-                traverser,
+        if self.calibration_trainer is not None:
+            residual_means, predicted_variances, calibration_features = (
+                self.calibration_trainer.predict_all(
+                    infostate,
+                    self.num_iteration,
+                    disagreement,
+                    traverser,
+                )
             )
-        )
-        beta = variance_optimal_beta(
-            q_values,
-            residual_means,
-            beta_min=self.beta_min,
-            beta_max=self.beta_max,
-            ridge=self.beta_ridge,
-        )
+        else:
+            residual_means = np.zeros(self.action_size, dtype=np.float64)
+            predicted_variances = np.ones(self.action_size, dtype=np.float64)
+            calibration_features = None
+        if self.fixed_control_variate_beta is None:
+            beta = variance_optimal_beta(
+                q_values,
+                residual_means,
+                beta_min=self.beta_min,
+                beta_max=self.beta_max,
+                ridge=self.beta_ridge,
+            )
+        else:
+            beta = np.full(
+                self.action_size,
+                self.fixed_control_variate_beta,
+                dtype=np.float64,
+            )
         if player == traverser:
-            sample_policy = residual_adaptive_sampling_policy(
-                predicted_variances,
-                legal_mask,
-                uniform_floor_mass=self.sampling_uniform_floor_mass,
-                minimum_variance=self.calibration_minimum_variance,
+            sample_policy = self._traverser_sampling_policy(
+                q_values=q_values,
+                beta=beta,
+                residual_means=residual_means,
+                predicted_variances=predicted_variances,
+                policy=policy,
+                legal_mask=legal_mask,
             )
         else:
             sample_policy = np.where(legal_mask > 0.0, policy, 0.0)
@@ -733,10 +844,26 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
             policy=policy,
             legal_actions_mask=legal_mask,
         )
-        self.calibration_trainer.add(
-            calibration_features[action],
-            estimate.q_residual,
+        observe_control_return = getattr(
+            self.q_value_trainer,
+            "observe_control_return",
+            None,
         )
+        if observe_control_return is not None:
+            # Optional control-critic controllers receive only the sampled
+            # return after all mixture and sampling decisions were made.
+            observe_control_return(
+                state=state,
+                player=traverser,
+                action=action,
+                sampled_return=sampled_return,
+                iteration=self.num_iteration,
+            )
+        if self.calibration_trainer is not None:
+            self.calibration_trainer.add(
+                calibration_features[action],
+                estimate.q_residual,
+            )
         self._record_estimate_diagnostics(
             beta=float(beta[action]),
             predicted_variance=float(predicted_variances[action]),

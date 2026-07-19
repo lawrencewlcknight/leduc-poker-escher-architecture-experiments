@@ -17,6 +17,8 @@ include = [
   "escher_poker.*",
   "experiments",
   "experiments.*",
+  "parallel_multi_action_escher",
+  "parallel_multi_action_escher.*",
   "unbiased_escher",
   "unbiased_escher.*",
   "vr_deep_cfr",
@@ -44,6 +46,11 @@ exclude = [
 ]
 "experiments.leduc_poker.unbiased_control_variate_escher_5x_nodes" = [
   "README.md",
+]
+"experiments.leduc_poker.parallel_multi_action_residual_escher_5x_nodes" = [
+  "README.md",
+  "experiment6_checkpoint_curves.csv",
+  "experiment6_seed_summary.csv",
 ]
 
 [tool.ruff]
