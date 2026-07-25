@@ -976,6 +976,103 @@ parallel event-merging design, full Batch command, Experiment 6 checksums and
 output inventory are in
 `experiments/leduc_poker/parallel_multi_action_residual_escher_5x_nodes/README.md`.
 
+## Experiments 13–14: recommended fixed-beta reservoir candidate
+
+Experiments 13 and 14 combine the strongest supported mechanisms from
+Experiments 8 and 9:
+
+- the always-unbiased residual correction is fixed at `beta=1`;
+- all three persistent frozen-target critic folds use uniform lifetime
+  reservoir replay;
+- Experiment 6's calibrated full-support sampler and gated predictor remain;
+- Experiment 9's fast critics and rho controller are removed.
+
+Only the new candidate is trained. Experiment 13 imports immutable Experiment
+6 results at the paired 4.7M-node budgets. Experiment 14 imports all three
+immutable Experiment 7 algorithms at approximately 15M nodes.
+
+| Experiment | Work inside one Batch job | Expected completion | Set Batch maximum to |
+|---|---|---:|---:|
+| 13 | Candidate × 3 seeds at Experiment 6 budgets | 12 hours | **1,440 minutes** (`86400` seconds) |
+| 14 | Candidate × 3 seeds at 15M nodes | 36 hours | **2,880 minutes** (`172800` seconds) |
+
+### Experiment 13 full single GCP Batch job
+
+```bash
+JOB_NAME="leduc-escher-arch-exp13-reservoir-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fixed_beta_reservoir_escher_5x_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 86400 8000 32000 100
+```
+
+### Experiment 13 GCP Batch smoke test
+
+```bash
+JOB_NAME="leduc-escher-arch-exp13-reservoir-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fixed_beta_reservoir_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+### Experiment 14 full single GCP Batch job
+
+```bash
+JOB_NAME="leduc-escher-arch-exp14-reservoir-15m-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fixed_beta_reservoir_escher_15m_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 172800 8000 32000 100
+```
+
+### Experiment 14 GCP Batch smoke test
+
+```bash
+JOB_NAME="leduc-escher-arch-exp14-reservoir-15m-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fixed_beta_reservoir_escher_15m_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The architecture rationale, convergence route, exact comparator checksums,
+local smoke tests, runtime derivations and output inventories are documented
+in:
+
+- `experiments/leduc_poker/fixed_beta_reservoir_escher_5x_nodes/README.md`;
+- `experiments/leduc_poker/fixed_beta_reservoir_escher_15m_nodes/README.md`.
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
