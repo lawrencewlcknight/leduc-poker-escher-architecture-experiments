@@ -269,7 +269,9 @@ def test_readmes_document_full_then_smoke_batch_jobs():
         / "README.md"
     ).read_text(encoding="utf-8")
     module = "fixed_beta_fast_slow_escher_5x_nodes.run"
-    smoke_job = "leduc-escher-arch-exp15-fixed-beta-fast-slow-smoke"
+    smoke_job = "leduc-escher-arch-exp15-smoke"
+    timestamp = "20260801-213137"
+    assert len(f"{smoke_job}-{timestamp}") <= 63
     for readme in (root_readme, experiment_readme):
         assert module in readme
         assert smoke_job in readme

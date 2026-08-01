@@ -1108,7 +1108,7 @@ JOB_NAME="leduc-escher-arch-exp15-fixed-beta-fast-slow-$(date -u +%Y%m%d-%H%M%S)
 ### Experiment 15 GCP Batch smoke test
 
 ```bash
-JOB_NAME="leduc-escher-arch-exp15-fixed-beta-fast-slow-smoke-$(date -u +%Y%m%d-%H%M%S)"
+JOB_NAME="leduc-escher-arch-exp15-smoke-$(date -u +%Y%m%d-%H%M%S)"
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \
