@@ -19,6 +19,8 @@ include = [
   "experiments.*",
   "fast_slow_escher",
   "fast_slow_escher.*",
+  "fixed_beta_fast_slow_escher",
+  "fixed_beta_fast_slow_escher.*",
   "fixed_beta_reservoir_escher",
   "fixed_beta_reservoir_escher.*",
   "parallel_multi_action_escher",
@@ -65,6 +67,13 @@ exclude = [
   "README.md",
   "experiment7_checkpoint_curves.csv",
   "experiment7_seed_summary.csv",
+]
+"experiments.leduc_poker.fixed_beta_fast_slow_escher_5x_nodes" = [
+  "README.md",
+  "experiment9_combined_checkpoint_curves.csv",
+  "experiment9_combined_seed_summary.csv",
+  "experiment13_checkpoint_curves.csv",
+  "experiment13_seed_summary.csv",
 ]
 
 [tool.ruff]

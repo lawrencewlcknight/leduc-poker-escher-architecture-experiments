@@ -1073,6 +1073,69 @@ in:
 - `experiments/leduc_poker/fixed_beta_reservoir_escher_5x_nodes/README.md`;
 - `experiments/leduc_poker/fixed_beta_reservoir_escher_15m_nodes/README.md`.
 
+## Experiment 15: fixed-beta full fast/slow control critic
+
+The Experiment 13 audit showed that the Experiment 9 improvement could not be
+attributed to its slow lifetime reservoir alone. Experiment 15 therefore keeps
+the complete Experiment 9 architecture—fast critics, slow critics and learned
+rho controller—and fixes the always-unbiased control-variate coefficient at
+`beta=1`.
+
+It also corrects the replay RNG confound found during the audit. Every fast
+replay, slow reservoir and rho-controller replay uses a deterministic
+component-local Python RNG, so control-side replacement and minibatch sampling
+cannot perturb the regret, calibration or average-policy learners.
+
+Only the new candidate is trained. Checksum-protected Experiment 6, 9 and 13
+results are included in the charts. Seeds `0`, `1` and `2` use the same paired
+approximately 4.7M-node budgets as Experiment 13.
+
+Expected completion is approximately **17 hours** for the three sequential
+seeds. Set the single-Batch maximum to **2,160 minutes** (`129600` seconds).
+
+### Experiment 15 full single GCP Batch job
+
+```bash
+JOB_NAME="leduc-escher-arch-exp15-fixed-beta-fast-slow-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fixed_beta_fast_slow_escher_5x_nodes.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 129600 8000 32000 100
+```
+
+### Experiment 15 GCP Batch smoke test
+
+```bash
+JOB_NAME="leduc-escher-arch-exp15-fixed-beta-fast-slow-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.fixed_beta_fast_slow_escher_5x_nodes.run \
+    --seeds 0 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --fast-q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --rho-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --fast-q-buffer-size 128 \
+    --rho-buffer-size 128 \
+    --early-evaluation-nodes 10 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The architectural contract, RNG-isolation correction, comparator checksums,
+local smoke command and output inventory are in
+`experiments/leduc_poker/fixed_beta_fast_slow_escher_5x_nodes/README.md`.
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:

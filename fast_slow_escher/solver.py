@@ -15,7 +15,60 @@ from unbiased_escher.solver import (
     CrossFittedQMember,
     UnbiasedControlVariateEscher,
 )
-from vr_deep_cfr.solver import MLP
+from vr_deep_cfr.solver import CircularBuffer, MLP
+
+
+def _sample_indices(rng, population_size: int, count: int):
+    """Sample indices without advancing the process-wide Python RNG."""
+
+    sampler = rng if rng is not None else random
+    return sampler.sample(range(int(population_size)), int(count))
+
+
+class IsolatedCircularTransitionBuffer(CircularBuffer):
+    """Recent transition replay with an optional component-local RNG."""
+
+    def __init__(
+        self,
+        buffer_size,
+        history_size,
+        state_size,
+        action_size,
+        device="cpu",
+        *,
+        rng=None,
+    ):
+        self.rng = rng
+        super().__init__(
+            buffer_size,
+            history_size,
+            state_size,
+            action_size,
+            device=device,
+        )
+
+    def sample(self, num_samples=-1):
+        data_length = len(self)
+        if num_samples == -1 or num_samples > data_length:
+            indices = list(range(data_length))
+        else:
+            indices = _sample_indices(self.rng, data_length, num_samples)
+        float_data = (
+            self.history_buf[indices],
+            self.next_history_buf[indices],
+            self.next_state_buf[indices],
+            self.reward_buf[indices],
+        )
+        int_data = (
+            self.next_legal_actions_mask_buf[indices],
+            self.next_player_buf[indices],
+            self.action_buf[indices],
+            self.done_buf[indices],
+        )
+        return (
+            *map(self.numpy_to_float_tensor, float_data),
+            *map(self.numpy_to_int_tensor, int_data),
+        )
 
 
 class ReservoirTransitionBuffer:
@@ -28,6 +81,8 @@ class ReservoirTransitionBuffer:
         state_size: int,
         action_size: int,
         device: str,
+        *,
+        rng=None,
     ):
         if capacity <= 0:
             raise ValueError("Reservoir capacity must be positive")
@@ -36,6 +91,7 @@ class ReservoirTransitionBuffer:
         self.state_size = int(state_size)
         self.action_size = int(action_size)
         self.device = str(device)
+        self.rng = rng
         self.history = np.zeros((capacity, history_size), dtype=np.float32)
         self.next_history = np.zeros((capacity, history_size), dtype=np.float32)
         self.next_state = np.zeros((capacity, state_size), dtype=np.float32)
@@ -62,7 +118,8 @@ class ReservoirTransitionBuffer:
             index = self.size
             self.size += 1
         else:
-            candidate = random.randrange(self.seen_count + 1)
+            sampler = self.rng if self.rng is not None else random
+            candidate = sampler.randrange(self.seen_count + 1)
             if candidate >= self.capacity:
                 self.seen_count += 1
                 return
@@ -81,7 +138,7 @@ class ReservoirTransitionBuffer:
         if count == -1 or count > self.size:
             indices = list(range(self.size))
         else:
-            indices = random.sample(range(self.size), int(count))
+            indices = _sample_indices(self.rng, self.size, count)
         floats = (
             self.history[indices],
             self.next_history[indices],
@@ -112,10 +169,11 @@ class ReservoirTransitionBuffer:
 class RhoReplayBuffer:
     """Recent out-of-fold critic predictions and sampled returns."""
 
-    def __init__(self, capacity: int, feature_size: int):
+    def __init__(self, capacity: int, feature_size: int, *, rng=None):
         if capacity <= 0:
             raise ValueError("Rho replay capacity must be positive")
         self.capacity = int(capacity)
+        self.rng = rng
         self.features = np.zeros((capacity, feature_size), dtype=np.float32)
         self.fast_values = np.zeros(capacity, dtype=np.float32)
         self.slow_values = np.zeros(capacity, dtype=np.float32)
@@ -133,7 +191,7 @@ class RhoReplayBuffer:
 
     def sample(self, count: int, device: str):
         count = min(int(count), self.size)
-        indices = random.sample(range(self.size), count)
+        indices = _sample_indices(self.rng, self.size, count)
         return tuple(
             torch.as_tensor(value[indices], dtype=torch.float32, device=device)
             for value in (
@@ -163,6 +221,7 @@ class HeldOutRhoController:
         train_steps: int,
         device: str,
         gradient_clip_norm: float,
+        replay_rng=None,
     ):
         self.infostate_size = int(infostate_size)
         self.action_size = int(action_size)
@@ -181,7 +240,11 @@ class HeldOutRhoController:
             lr=float(learning_rate),
         )
         self.loss_fn = nn.MSELoss()
-        self.buffer = RhoReplayBuffer(buffer_size, self.feature_size)
+        self.buffer = RhoReplayBuffer(
+            buffer_size,
+            self.feature_size,
+            rng=replay_rng,
+        )
         self.target_version = 0
 
     def feature(
@@ -306,6 +369,7 @@ class FastSlowCrossFittedQEnsemble:
         rho_batch_size: int,
         rho_train_steps: int,
         rho_learning_rate: float,
+        replay_rng_seed: int | None = None,
     ):
         if ensemble_size < 2:
             raise ValueError("Fast/slow cross-fitting requires at least two folds")
@@ -313,6 +377,16 @@ class FastSlowCrossFittedQEnsemble:
         self.action_size = int(action_size)
         self.active_fold = 0
         self.current_iteration = 0
+        self.replay_rng_seed = (
+            None if replay_rng_seed is None else int(replay_rng_seed)
+        )
+        self.isolated_replay_rng = self.replay_rng_seed is not None
+
+        def component_rng(offset: int):
+            if self.replay_rng_seed is None:
+                return None
+            return random.Random(self.replay_rng_seed + int(offset))
+
         slow_member_capacity = max(1, int(slow_buffer_size) // ensemble_size)
         fast_member_capacity = max(1, int(fast_buffer_size) // ensemble_size)
         self.slow_members = [
@@ -332,13 +406,14 @@ class FastSlowCrossFittedQEnsemble:
             )
             for _ in range(ensemble_size)
         ]
-        for member in self.slow_members:
+        for fold, member in enumerate(self.slow_members):
             member.buffer = ReservoirTransitionBuffer(
                 slow_member_capacity,
                 history_size,
                 state_size,
                 action_size,
                 device,
+                rng=component_rng(10_000 + fold),
             )
         self.fast_members = [
             CrossFittedQMember(
@@ -357,6 +432,16 @@ class FastSlowCrossFittedQEnsemble:
             )
             for _ in range(ensemble_size)
         ]
+        if self.isolated_replay_rng:
+            for fold, member in enumerate(self.fast_members):
+                member.buffer = IsolatedCircularTransitionBuffer(
+                    fast_member_capacity,
+                    history_size,
+                    state_size,
+                    action_size,
+                    device,
+                    rng=component_rng(20_000 + fold),
+                )
         # Compatibility with the Experiment 6 diagnostics: these are the
         # long-horizon folds, with explicit fast-fold fields logged separately.
         self.members = self.slow_members
@@ -370,6 +455,7 @@ class FastSlowCrossFittedQEnsemble:
             train_steps=rho_train_steps,
             device=device,
             gradient_clip_norm=gradient_clip_norm,
+            replay_rng=component_rng(30_000),
         )
         self.last_fast_loss = None
         self.last_slow_loss = None
@@ -594,6 +680,12 @@ class FastSlowCrossFittedQEnsemble:
             "slow_critic_lifetime_seen_count": sum(
                 member.buffer.seen_count for member in self.slow_members
             ),
+            "control_replay_rng_isolated": float(self.isolated_replay_rng),
+            "control_replay_rng_seed": (
+                float(self.replay_rng_seed)
+                if self.replay_rng_seed is not None
+                else np.nan
+            ),
         }
 
 
@@ -609,6 +701,7 @@ class FastSlowControlCriticEscher(UnbiasedControlVariateEscher):
         rho_batch_size: int = 2_048,
         rho_train_steps: int = 2_000,
         rho_learning_rate: float = 1e-3,
+        control_replay_seed: int | None = None,
         **kwargs,
     ):
         self.fast_q_buffer_size = int(fast_q_buffer_size)
@@ -617,6 +710,9 @@ class FastSlowControlCriticEscher(UnbiasedControlVariateEscher):
         self.rho_batch_size = int(rho_batch_size)
         self.rho_train_steps = int(rho_train_steps)
         self.rho_learning_rate = float(rho_learning_rate)
+        self.control_replay_seed = (
+            None if control_replay_seed is None else int(control_replay_seed)
+        )
         super().__init__(*args, **kwargs)
 
     def init_q_value_trainer(self):
@@ -647,6 +743,7 @@ class FastSlowControlCriticEscher(UnbiasedControlVariateEscher):
             rho_batch_size=self.rho_batch_size,
             rho_train_steps=self.rho_train_steps,
             rho_learning_rate=self.rho_learning_rate,
+            replay_rng_seed=self.control_replay_seed,
         )
 
     def iteration(self):
