@@ -164,13 +164,17 @@ class DeepCumuAdv:
             self.device,
         )
 
-    def solve(self):
+    def solve(self, post_checkpoint_callback=None):
         """Train until the configured iteration cap or matched node budget.
 
         Optional initial and node-threshold checkpoints are evaluation-only:
         they do not add training nodes and their RNG use is isolated from the
-        subsequent traversal stream.
+        subsequent traversal stream. The optional callback is called after an
+        already scheduled policy fit and exact evaluation. It receives the
+        solver and checkpoint row and does not require another fit or
+        evaluation.
         """
+        self._post_checkpoint_callback = post_checkpoint_callback
         self._solve_start_time = time.perf_counter()
         self._prepare_early_evaluation_schedule()
         if self.evaluate_initial_policy:
@@ -265,6 +269,9 @@ class DeepCumuAdv:
                 checkpoint_kind=checkpoint_kind,
                 checkpoint_target_nodes=checkpoint_target_nodes,
             )
+            callback = getattr(self, "_post_checkpoint_callback", None)
+            if callback is not None:
+                callback(self, dict(self.checkpoint_rows[-1]))
         finally:
             if rng_state is not None:
                 self._restore_rng_state(rng_state)

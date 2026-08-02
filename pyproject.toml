@@ -75,6 +75,9 @@ exclude = [
   "experiment13_checkpoint_curves.csv",
   "experiment13_seed_summary.csv",
 ]
+"experiments.leduc_poker.unbiased_escher_temporal_checkpoint_head_to_head" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100

@@ -9,11 +9,8 @@ import re
 from typing import Any, Dict, Iterable, List, Optional
 
 import numpy as np
-import tensorflow as tf
 
 from open_spiel.python import policy
-
-from .networks import PolicyNetwork
 
 OUTPUT_FILE_PREFIX = "leduc_poker_escher_"
 
@@ -22,6 +19,18 @@ SNAPSHOT_RE = re.compile(
     r"(?P<arm>checkpointed|continuous_baseline)_"
     r"policy_snapshot_(?P<iteration>\d+)_iters\.pkl$"
 )
+
+
+def _tensorflow():
+    """Import TensorFlow only for legacy Keras checkpoint operations."""
+    try:
+        import tensorflow as tf
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "TensorFlow is required to read or write legacy ESCHER snapshots; "
+            "PyTorch Unbiased ESCHER snapshots do not require it."
+        ) from exc
+    return tf
 
 
 def prefixed_output_filename(filename: str) -> str:
@@ -49,6 +58,7 @@ def save_full_solver_checkpoint(
     include_rng: bool = True,
 ) -> None:
     """Save solver weights, replay buffers, counters, and optional RNG state."""
+    tf = _tensorflow()
     checkpoint = solver.extract_full_model()
     checkpoint["version"] = 1
     checkpoint["type"] = "escher_full_solver_checkpoint"
@@ -75,6 +85,7 @@ def load_full_solver_checkpoint(
     restore_rng: bool = True,
 ):
     """Restore a checkpoint produced by ``save_full_solver_checkpoint``."""
+    tf = _tensorflow()
     checkpoint = load_pickle(path)
     solver.load_full_model(checkpoint)
     if "nodes_visited" in checkpoint:
@@ -147,6 +158,50 @@ def save_policy_snapshot(
     save_pickle(snapshot, path)
 
 
+def save_torch_policy_snapshot(
+    solver,
+    path: str | Path,
+    *,
+    seed: int,
+    iteration: int,
+    arm: str,
+    config: Dict[str, Any],
+    stage_label: str,
+    checkpoint_target_nodes: int,
+) -> None:
+    """Save a lightweight PyTorch average-policy snapshot.
+
+    Tensor copies are moved to CPU and cloned without advancing any random
+    generator. The snapshot contains no replay buffers, critic parameters or
+    optimiser state and is therefore evaluation-only.
+    """
+    state_dict = {
+        name: tensor.detach().cpu().clone()
+        for name, tensor in solver.ave_policy_trainer.model.state_dict().items()
+    }
+    snapshot = {
+        "version": 1,
+        "type": "escher_policy_snapshot",
+        "framework": "pytorch",
+        "algorithm": "Unbiased Control-Variate ESCHER",
+        "game": str(config.get("game_name", "leduc_poker")),
+        "arm": str(arm),
+        "seed": int(seed),
+        "checkpoint_iteration": int(iteration),
+        "solver_internal_iteration": int(getattr(solver, "num_iteration", -1)),
+        "nodes_visited": int(getattr(solver, "nodes_touched", -1)),
+        "checkpoint_target_nodes": int(checkpoint_target_nodes),
+        "stage_label": str(stage_label),
+        "policy_state_dict": state_dict,
+        "policy_network_layers": list(solver.network_layers),
+        "input_size": int(solver.infostate_size),
+        "num_actions": int(solver.action_size),
+    }
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    save_pickle(snapshot, path)
+
+
 def infer_policy_architecture_from_weights(policy_weights: Iterable[Any]) -> tuple[int, tuple[int, ...], int]:
     """Infer policy network dimensions from saved Keras weights."""
     two_d_weights = [np.asarray(weight) for weight in policy_weights if np.asarray(weight).ndim == 2]
@@ -167,6 +222,31 @@ class LoadedESCHERPolicy(policy.Policy):
         self._game = game
         self.snapshot_path = Path(snapshot_path)
         snapshot = load_pickle(snapshot_path)
+        if "policy_state_dict" in snapshot:
+            from vr_deep_cfr.solver import MLP
+
+            self.snapshot = snapshot
+            self.arm = snapshot.get("arm", "unknown")
+            self.seed = int(snapshot.get("seed", -1))
+            self.checkpoint_iteration = int(
+                snapshot.get("checkpoint_iteration", -1)
+            )
+            self.nodes_visited = int(snapshot.get("nodes_visited", -1))
+            self.input_size = int(snapshot["input_size"])
+            self.policy_network_layers = tuple(
+                int(value) for value in snapshot["policy_network_layers"]
+            )
+            self.num_actions = int(snapshot["num_actions"])
+            self._framework = "pytorch"
+            self._torch_model = MLP(
+                self.input_size,
+                list(self.policy_network_layers),
+                self.num_actions,
+            )
+            self._torch_model.load_state_dict(snapshot["policy_state_dict"])
+            self._torch_model.eval()
+            return
+
         if "policy_weights" not in snapshot and "policy_weights" in snapshot.get("model", {}):
             snapshot = snapshot["model"]
 
@@ -188,6 +268,11 @@ class LoadedESCHERPolicy(policy.Policy):
         self.input_size = int(input_size)
         self.policy_network_layers = tuple(policy_network_layers)
         self.num_actions = int(num_actions)
+        self._framework = "tensorflow"
+        tf = _tensorflow()
+        self._tf = tf
+        from .networks import PolicyNetwork
+
         self._policy_network = PolicyNetwork(
             self.input_size,
             self.policy_network_layers,
@@ -201,6 +286,28 @@ class LoadedESCHERPolicy(policy.Policy):
     def action_probabilities(self, state, player_id: Optional[int] = None):
         cur_player = state.current_player() if player_id is None else player_id
         legal_actions = state.legal_actions(cur_player)
+        if self._framework == "pytorch":
+            import torch
+
+            info_state = torch.as_tensor(
+                state.information_state_tensor(cur_player),
+                dtype=torch.float32,
+            )
+            legal_mask = torch.as_tensor(
+                state.legal_actions_mask(cur_player),
+                dtype=torch.float32,
+            )
+            with torch.no_grad():
+                logits = self._torch_model(info_state)
+                legal_logits = torch.where(
+                    legal_mask == 1,
+                    logits,
+                    torch.full_like(logits, -1e21),
+                )
+                probs = torch.softmax(legal_logits, dim=-1).cpu().numpy()
+            return {action: float(probs[action]) for action in legal_actions}
+
+        tf = self._tf
         mask = tf.constant(state.legal_actions_mask(cur_player), dtype=tf.float32)
         info_state = tf.constant(state.information_state_tensor(cur_player), dtype=tf.float32)
         if len(info_state.shape) == 1:

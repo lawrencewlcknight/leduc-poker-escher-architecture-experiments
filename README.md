@@ -48,6 +48,10 @@ experiments/leduc_poker/
   monte_carlo_control_critic_escher_5x_nodes/ Experiment 10 direct MC critic
   advantage_variance_sampling_escher_5x_nodes/ Experiment 11 advantage sampler
   parallel_multi_action_residual_escher_5x_nodes/ Experiment 12 action subsets
+  fixed_beta_reservoir_escher_5x_nodes/ Experiment 13 fixed-beta reservoir
+  fixed_beta_reservoir_escher_15m_nodes/ Experiment 14 long reservoir run
+  fixed_beta_fast_slow_escher_5x_nodes/ Experiment 15 corrected composition
+  unbiased_escher_temporal_checkpoint_head_to_head/ Experiment 16 temporal H2H
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1135,6 +1139,76 @@ JOB_NAME="leduc-escher-arch-exp15-smoke-$(date -u +%Y%m%d-%H%M%S)"
 The architectural contract, RNG-isolation correction, comparator checksums,
 local smoke command and output inventory are in
 `experiments/leduc_poker/fixed_beta_fast_slow_escher_5x_nodes/README.md`.
+
+## Experiment 16: Experiment 7 temporal checkpoint head-to-head
+
+Experiment 16 trains the Experiment 7 Unbiased Control-Variate ESCHER
+configuration to approximately 15 million nodes for five independent seeds.
+One uninterrupted run per seed saves fitted average policies after the first
+complete outer iteration crossing approximately 3M, 6M, 9M, 12M and 15M
+nodes. Every pair is then evaluated exactly in both seats; training seed is the
+inferential unit, so no Monte Carlo game-count choice is required.
+
+The five sequential seeds are projected to require 54.4 hours from measured
+Experiment 7 throughput. Allow **55--65 hours** and set the Batch maximum to
+**5,760 minutes** (`345600` seconds).
+
+### Experiment 16 local smoke test
+
+```bash
+python -m experiments.leduc_poker.unbiased_escher_temporal_checkpoint_head_to_head.run \
+  --seeds 1234 \
+  --target-nodes 50 \
+  --traversals 4 \
+  --max-iterations 2 \
+  --advantage-train-steps 1 \
+  --policy-train-steps 1 \
+  --q-train-steps 1 \
+  --calibration-train-steps 1 \
+  --batch-size 2 \
+  --buffer-size 128 \
+  --early-evaluation-nodes 5 \
+  --output-root outputs/smoke_tests
+```
+
+### Experiment 16 full single GCP Batch job
+
+```bash
+JOB_NAME="leduc-escher-arch-exp16-temporal-h2h-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_escher_temporal_checkpoint_head_to_head.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 345600 8000 32000 100
+```
+
+### Experiment 16 GCP Batch smoke test
+
+```bash
+JOB_NAME="leduc-escher-arch-exp16-temporal-h2h-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.unbiased_escher_temporal_checkpoint_head_to_head.run \
+    --seeds 1234 \
+    --target-nodes 50 \
+    --traversals 4 \
+    --max-iterations 2 \
+    --advantage-train-steps 1 \
+    --policy-train-steps 1 \
+    --q-train-steps 1 \
+    --calibration-train-steps 1 \
+    --batch-size 2 \
+    --buffer-size 128 \
+    --early-evaluation-nodes 5 \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The exact estimands, sign-flip inference, snapshot invariants, analysis-only
+command and output inventory are documented in
+`experiments/leduc_poker/unbiased_escher_temporal_checkpoint_head_to_head/README.md`.
 
 ## Add an architecture experiment
 
