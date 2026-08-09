@@ -78,6 +78,9 @@ exclude = [
 "experiments.leduc_poker.unbiased_escher_temporal_checkpoint_head_to_head" = [
   "README.md",
 ]
+"experiments.leduc_poker.six_algorithm_final_policy_head_to_head" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100

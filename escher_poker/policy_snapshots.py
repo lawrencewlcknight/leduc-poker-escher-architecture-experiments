@@ -277,6 +277,15 @@ class LoadedESCHERPolicy(policy.Policy):
             self.input_size,
             self.policy_network_layers,
             self.num_actions,
+            activation=snapshot.get("policy_network_activation", "leakyrelu"),
+            use_layer_norm=bool(
+                snapshot.get("policy_network_layer_norm", True)
+            ),
+            residual_mode=snapshot.get(
+                "policy_network_residual_mode", "same_width"
+            ),
+            head_depth=int(snapshot.get("policy_network_head_depth", 0)),
+            head_units=snapshot.get("policy_network_head_units"),
         )
         dummy_x = tf.zeros((1, self.input_size), dtype=tf.float32)
         dummy_mask = tf.ones((1, self.num_actions), dtype=tf.float32)

@@ -52,6 +52,7 @@ experiments/leduc_poker/
   fixed_beta_reservoir_escher_15m_nodes/ Experiment 14 long reservoir run
   fixed_beta_fast_slow_escher_5x_nodes/ Experiment 15 corrected composition
   unbiased_escher_temporal_checkpoint_head_to_head/ Experiment 16 temporal H2H
+  six_algorithm_final_policy_head_to_head/ Experiment 17 six-algorithm H2H
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1209,6 +1210,67 @@ JOB_NAME="leduc-escher-arch-exp16-temporal-h2h-smoke-$(date -u +%Y%m%d-%H%M%S)"
 The exact estimands, sign-flip inference, snapshot invariants, analysis-only
 command and output inventory are documented in
 `experiments/leduc_poker/unbiased_escher_temporal_checkpoint_head_to_head/README.md`.
+
+## Experiment 17: six-algorithm final-policy head-to-head
+
+Experiment 17 compares the best approximately 15-million-node configurations
+of Deep CFR, DREAM, ESCHER, VR-DeepDCFR+, VR-DeepPDCFR+ and UCV-ESCHER across
+the common seeds `1234`, `2025`, `31415`, `27182`, and `16180`. It reuses and
+archives the existing final snapshots for four algorithms and trains the two
+VR algorithms with the authors' parameterisation imported from Experiment 7.
+
+Every policy pair is evaluated exactly in both seats. No games are sampled;
+the paired training seed is the inferential unit. The secondary league also
+evaluates all 25 cross-seed policy combinations for each algorithm pair without
+treating those correlated matchups as independent samples. With five seeds,
+the smallest possible two-sided exact sign-flip p-value is `0.0625`, so effect
+sizes and consistency can be reported but conventional two-sided significance
+requires more training seeds.
+
+Measured Experiment 7 times project **65.3 hours** for the ten sequential VR
+training runs on `n2-standard-8`. Allow **70--80 hours** including staging and
+exact analysis. Use the standard project Batch allocation and 96-hour limit:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "bash gcp/fetch_experiment_17_snapshots.sh '$BUCKET' /tmp/exp17_snapshots && \
+   python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
+     --snapshot-root /tmp/exp17_snapshots \
+     --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 345600 8000 32000 100
+```
+
+GCP smoke test using the same Batch configuration:
+
+```bash
+JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "bash gcp/fetch_experiment_17_snapshots.sh '$BUCKET' /tmp/exp17_snapshots && \
+   python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
+     --smoke \
+     --seeds 1234 \
+     --target-nodes 50 \
+     --traversals 4 \
+     --max-iterations 2 \
+     --advantage-train-steps 1 \
+     --policy-train-steps 1 \
+     --q-train-steps 1 \
+     --batch-size 2 \
+     --buffer-size 128 \
+     --early-evaluation-nodes 10 \
+     --snapshot-root /tmp/exp17_snapshots \
+     --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 345600 8000 32000 100
+```
+
+The complete design, local smoke command, snapshot staging contract, runtime
+derivation and output inventory are in
+`experiments/leduc_poker/six_algorithm_final_policy_head_to_head/README.md`.
 
 ## Add an architecture experiment
 
