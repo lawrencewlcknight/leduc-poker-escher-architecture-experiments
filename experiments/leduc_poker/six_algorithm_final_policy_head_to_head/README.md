@@ -116,10 +116,13 @@ python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
 
 ## Full GCP Batch job
 
-The four existing snapshot jobs are distributed across the Deep CFR, DREAM and
-ESCHER repository result buckets. The Batch wrapper stages each audited source
-from its repository-specific bucket and then starts the runner with the staged
-snapshot root. Use the project-wide standard Batch configuration:
+The four existing snapshot jobs were originally distributed across the Deep
+CFR, DREAM and ESCHER result buckets. The Batch service account is deliberately
+not granted cross-repository bucket access, so the 100 original snapshot
+objects are mirrored in the versioned Experiment 17 input bundle at
+`gs://clever-overview-399515-leduc-poker-dream-results/experiment-17-inputs/six-algorithm-final-policy-head-to-head-v1/`.
+The Batch wrapper downloads this audited bundle and then starts the runner with
+the staged snapshot root. Use the project-wide standard Batch configuration:
 
 ```bash
 JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-$(date -u +%Y%m%d-%H%M%S)"

@@ -1230,8 +1230,9 @@ requires more training seeds.
 Measured Experiment 7 times project **65.3 hours** for the ten sequential VR
 training runs on `n2-standard-8`. Allow **70--80 hours** including staging and
 exact analysis. Use the standard project Batch allocation and 96-hour limit.
-The wrapper reads the four audited inputs from their repository-specific GCS
-buckets; `BUCKET` remains the destination for the new Experiment 17 outputs.
+The wrapper reads the four audited inputs from a versioned bundle in the DREAM
+results bucket, to which the Batch service account already has access; `BUCKET`
+remains the destination for the new Experiment 17 outputs.
 
 ```bash
 JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-$(date -u +%Y%m%d-%H%M%S)"
