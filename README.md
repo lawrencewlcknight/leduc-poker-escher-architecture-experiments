@@ -1229,16 +1229,16 @@ requires more training seeds.
 
 Measured Experiment 7 times project **65.3 hours** for the ten sequential VR
 training runs on `n2-standard-8`. Allow **70--80 hours** including staging and
-exact analysis. Use the standard project Batch allocation and 96-hour limit:
+exact analysis. Use the standard project Batch allocation and 96-hour limit.
+The wrapper reads the four audited inputs from their repository-specific GCS
+buckets; `BUCKET` remains the destination for the new Experiment 17 outputs.
 
 ```bash
 JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-$(date -u +%Y%m%d-%H%M%S)"
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \
-  "bash gcp/fetch_experiment_17_snapshots.sh '$BUCKET' /tmp/exp17_snapshots && \
-   python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
-     --snapshot-root /tmp/exp17_snapshots \
+  "bash gcp/run_experiment_17.sh \
      --output-root outputs/cloud/$JOB_NAME" \
   n2-standard-8 345600 8000 32000 100
 ```
@@ -1250,8 +1250,7 @@ JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-smoke-$(date -u +%Y%m%d-%H%M
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \
-  "bash gcp/fetch_experiment_17_snapshots.sh '$BUCKET' /tmp/exp17_snapshots && \
-   python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
+  "bash gcp/run_experiment_17.sh \
      --smoke \
      --seeds 1234 \
      --target-nodes 50 \
@@ -1263,7 +1262,6 @@ JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-smoke-$(date -u +%Y%m%d-%H%M
      --batch-size 2 \
      --buffer-size 128 \
      --early-evaluation-nodes 10 \
-     --snapshot-root /tmp/exp17_snapshots \
      --output-root outputs/cloud/$JOB_NAME" \
   n2-standard-8 345600 8000 32000 100
 ```

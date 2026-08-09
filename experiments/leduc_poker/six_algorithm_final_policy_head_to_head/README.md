@@ -116,18 +116,17 @@ python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
 
 ## Full GCP Batch job
 
-The four existing snapshot jobs must be present under the same results bucket.
-The staging helper downloads them inside the Batch VM before starting the
-runner. Use the project-wide standard Batch configuration:
+The four existing snapshot jobs are distributed across the Deep CFR, DREAM and
+ESCHER repository result buckets. The Batch wrapper stages each audited source
+from its repository-specific bucket and then starts the runner with the staged
+snapshot root. Use the project-wide standard Batch configuration:
 
 ```bash
 JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-$(date -u +%Y%m%d-%H%M%S)"
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \
-  "bash gcp/fetch_experiment_17_snapshots.sh '$BUCKET' /tmp/exp17_snapshots && \
-   python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
-     --snapshot-root /tmp/exp17_snapshots \
+  "bash gcp/run_experiment_17.sh \
      --output-root outputs/cloud/$JOB_NAME" \
   n2-standard-8 345600 8000 32000 100
 ```
@@ -142,8 +141,7 @@ JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-smoke-$(date -u +%Y%m%d-%H%M
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \
-  "bash gcp/fetch_experiment_17_snapshots.sh '$BUCKET' /tmp/exp17_snapshots && \
-   python -m experiments.leduc_poker.six_algorithm_final_policy_head_to_head.run \
+  "bash gcp/run_experiment_17.sh \
      --smoke \
      --seeds 1234 \
      --target-nodes 50 \
@@ -155,7 +153,6 @@ JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-smoke-$(date -u +%Y%m%d-%H%M
      --batch-size 2 \
      --buffer-size 128 \
      --early-evaluation-nodes 10 \
-     --snapshot-root /tmp/exp17_snapshots \
      --output-root outputs/cloud/$JOB_NAME" \
   n2-standard-8 345600 8000 32000 100
 ```

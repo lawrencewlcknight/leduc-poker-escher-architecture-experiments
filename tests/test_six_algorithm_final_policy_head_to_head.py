@@ -171,3 +171,23 @@ def test_readmes_document_exact_evaluation_gcp_config_and_runtime():
         assert "65.3 hours" in text
         assert "0.0625" in text
         assert "exact" in text.lower()
+        assert "bash gcp/run_experiment_17.sh" in text
+
+
+def test_gcp_staging_uses_repository_specific_source_buckets():
+    root = Path(__file__).parents[1]
+    fetch_script = (root / "gcp/fetch_experiment_17_snapshots.sh").read_text(
+        encoding="utf-8"
+    )
+    wrapper = (root / "gcp/run_experiment_17.sh").read_text(encoding="utf-8")
+
+    expected_buckets = {
+        "gs://clever-overview-399515-leduc-poker-results",
+        "gs://clever-overview-399515-leduc-poker-dream-results",
+        "gs://clever-overview-399515-leduc-poker-escher-results",
+    }
+    for bucket in expected_buckets:
+        assert bucket in fetch_script
+    assert "leduc-deep-cfr-exp27-/" in fetch_script
+    assert "fetch_experiment_17_snapshots.sh \"$SNAPSHOT_ROOT\"" in wrapper
+    assert '--snapshot-root "$SNAPSHOT_ROOT"' in wrapper
