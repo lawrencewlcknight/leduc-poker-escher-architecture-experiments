@@ -10,7 +10,7 @@ DESTINATION="$1"
 
 # The source experiments originally lived in three repository-specific buckets,
 # but the Batch service account intentionally has access only to this repository's
-# results bucket. Experiment 17 therefore uses an audited, read-only staging bundle
+# results bucket. Experiment 17 therefore uses an audited, versioned staging bundle
 # containing the 100 original snapshot objects. This avoids granting the Batch
 # identity broad access to unrelated Deep CFR and ESCHER artifacts.
 SOURCE_BUNDLE_ROOT="${EXPERIMENT_17_SOURCE_BUNDLE_ROOT:-gs://clever-overview-399515-leduc-poker-dream-results/experiment-17-inputs/six-algorithm-final-policy-head-to-head-v1}"
