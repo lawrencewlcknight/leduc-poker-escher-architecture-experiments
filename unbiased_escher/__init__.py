@@ -8,9 +8,18 @@ from .estimator import (
 )
 from .solver import UnbiasedControlVariateEscher
 
+
+def __getattr__(name):
+    if name == "ParallelUnbiasedControlVariateEscher":
+        from .parallel_solver import ParallelUnbiasedControlVariateEscher
+
+        return ParallelUnbiasedControlVariateEscher
+    raise AttributeError(name)
+
 __all__ = [
     "ControlVariateEstimate",
     "UnbiasedControlVariateEscher",
+    "ParallelUnbiasedControlVariateEscher",
     "control_variate_advantage",
     "residual_adaptive_sampling_policy",
     "variance_optimal_beta",

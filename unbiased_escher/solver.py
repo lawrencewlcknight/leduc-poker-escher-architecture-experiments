@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 import math
 import random
+import time
 from typing import Dict, Iterable, List
 
 import numpy as np
@@ -503,6 +504,7 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
             ema_decay=self.prediction_gate_ema_decay,
             initial_gate=self.prediction_gate_initial,
         )
+        self._cumulative_experience_collection_seconds = 0.0
         self._reset_architecture_diagnostics()
 
     def init_regret_trainers(self):
@@ -600,13 +602,19 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         return float(prediction_mse.item()), float(zero_mse.item())
 
     def collect_training_data(self, player):
-        self.regret_trainers[player].reset_buffer()
-        for _ in range(self.num_traversals):
-            self.episode += 1
-            self.q_value_trainer.begin_trajectory(self.episode)
-            root_state = self.skip_chance_state(self.game.new_initial_state())
-            self.dfs(root_state, player)
-            self._maybe_run_early_node_checkpoint()
+        start = time.perf_counter()
+        try:
+            self.regret_trainers[player].reset_buffer()
+            for _ in range(self.num_traversals):
+                self.episode += 1
+                self.q_value_trainer.begin_trajectory(self.episode)
+                root_state = self.skip_chance_state(self.game.new_initial_state())
+                self.dfs(root_state, player)
+                self._maybe_run_early_node_checkpoint()
+        finally:
+            self._cumulative_experience_collection_seconds += (
+                time.perf_counter() - start
+            )
 
     def iteration(self):
         self._reset_architecture_diagnostics()
@@ -704,6 +712,10 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         self.logger.record(
             "full_support_sampling_min_probability",
             self._minimum_sample_probability,
+        )
+        self.logger.record(
+            "cumulative_experience_collection_seconds",
+            self._cumulative_experience_collection_seconds,
         )
         self.logger.record(
             "calibration_target_version",

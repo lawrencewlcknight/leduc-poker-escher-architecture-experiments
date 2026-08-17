@@ -53,6 +53,7 @@ experiments/leduc_poker/
   fixed_beta_fast_slow_escher_5x_nodes/ Experiment 15 corrected composition
   unbiased_escher_temporal_checkpoint_head_to_head/ Experiment 16 temporal H2H
   six_algorithm_final_policy_head_to_head/ Experiment 17 six-algorithm H2H
+  ucv_escher_parallel_equivalence/      Experiment 18 parallel equivalence
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1270,6 +1271,61 @@ JOB_NAME="leduc-escher-arch-exp17-six-algorithm-h2h-smoke-$(date -u +%Y%m%d-%H%M
 The complete design, local smoke command, snapshot staging contract, runtime
 derivation and output inventory are in
 `experiments/leduc_poker/six_algorithm_final_policy_head_to_head/README.md`.
+
+## Experiment 18: parallel UCV-ESCHER equivalence
+
+Experiment 18 compares the exact Experiment 7 UCV-ESCHER learner under its
+existing sequential execution and a synchronous three-worker Ray backend. The
+parallel arm partitions, rather than multiplies, the 15-million-node traversal
+budget. Persistent replay and all authoritative optimisation remain in one
+driver; global trajectory IDs preserve the three cross-fitted Q folds. The
+independent Q-fold and residual-calibration learners also run concurrently with
+a bounded CPU-thread budget.
+
+The three paired seeds are assessed with pre-declared practical-equivalence
+margins of `0.02` final exploitability and `0.01` final policy value. The
+experiment is expected to take approximately **64 hours** on `n2-standard-8`.
+Use an **84-hour / 5,040-minute** Batch timeout.
+
+```bash
+JOB_NAME="leduc-escher-arch-exp18-ucv-parallel-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.ucv_escher_parallel_equivalence.run \
+     --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 302400 8000 32000 100
+```
+
+### Experiment 18 GCP Batch smoke test
+
+```bash
+JOB_NAME="leduc-escher-arch-exp18-ucv-par-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.ucv_escher_parallel_equivalence.run \
+     --seeds 0 \
+     --target-nodes 50 \
+     --traversals 4 \
+     --max-iterations 2 \
+     --advantage-train-steps 1 \
+     --policy-train-steps 1 \
+     --q-train-steps 1 \
+     --calibration-train-steps 1 \
+     --batch-size 2 \
+     --buffer-size 128 \
+     --evaluation-frequency 1 \
+     --early-evaluation-nodes 10 \
+     --parallel-num-workers 2 \
+     --parallel-ray-object-store-memory 268435456 \
+     --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+The architecture, equivalence estimand, resource controls, local smoke command
+and output inventory are documented in
+`experiments/leduc_poker/ucv_escher_parallel_equivalence/README.md`.
 
 ## Add an architecture experiment
 
