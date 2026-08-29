@@ -79,6 +79,80 @@ python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 ```
 
+## Run the frozen four-algorithm held-out benchmark
+
+This benchmark trains Deep CFR, VR-DeepDCFR+, VR-DeepPDCFR+, and UCV-ESCHER
+over eight frozen held-out seeds. Every run saves playable policies at the first
+completed iteration crossing 15 million nodes and at the first completed
+iteration crossing 11 active hours. The cloud launcher segments production into
+32 independent tasks (four algorithms by eight seeds) and runs the exact
+head-to-head analysis after training.
+
+### Mandatory local smoke test
+
+Place the Deep CFR repository at the normal sibling workspace location:
+
+```text
+deep_cfr_v3/
+  leduc_poker_escher_architecture/leduc-poker-escher-architecture-experiments/
+  leduc_poker_deep_cfr/leduc-poker-deep-cfr-experiments/
+```
+
+Then, from this repository, run:
+
+```bash
+./gcp/run_four_algorithm_heldout_benchmark.sh smoke-local
+```
+
+The smoke test uses development seed `0`, not a held-out seed. It runs all four
+training implementations with tiny budgets, writes both endpoint snapshots,
+reloads every snapshot as a playable OpenSpiel policy, and completes both exact
+head-to-head pipelines. Its numerical results are not scientifically meaningful.
+
+### Full Google Cloud Batch run
+
+Commit and push the repository before launching, then set immutable repository
+commits and the Google Cloud configuration:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west2"
+export BUCKET="gs://your-results-bucket/heldout-benchmarks"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export ARCH_REPO_REF="$(git rev-parse HEAD)"
+export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
+export RUN_ID="leduc-heldout-$(date -u '+%Y%m%d-%H%M%S')"
+
+./gcp/run_four_algorithm_heldout_benchmark.sh run
+```
+
+The single `run` command submits a clean-environment cloud smoke job first. It
+submits the 32-task production job only if that smoke job succeeds, waits for
+training, and then submits the exact aggregation job. Standard VMs and 32-way
+parallelism are the defaults.
+
+Useful operational commands are:
+
+```bash
+# Inspect the three Batch definitions without submitting them.
+./gcp/run_four_algorithm_heldout_benchmark.sh dry-run
+
+# Check jobs associated with RUN_ID.
+./gcp/run_four_algorithm_heldout_benchmark.sh status
+
+# Retry under the same artifact RUN_ID; validated completed workers are skipped.
+./gcp/run_four_algorithm_heldout_benchmark.sh resume
+
+# Reduce simultaneous N2 quota use.
+PARALLELISM=16 ./gcp/run_four_algorithm_heldout_benchmark.sh run
+```
+
+See the
+[complete benchmark protocol and artifact guide](experiments/leduc_poker/four_algorithm_heldout_benchmark/README.md)
+for endpoint semantics, frozen seeds and configurations, runtime estimates,
+Spot VM trade-offs, service-account requirements, output structure, and the
+confirmatory versus descriptive analyses.
+
 ## Run the Experiment 28 baseline
 
 Full five-seed run:
