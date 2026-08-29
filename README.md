@@ -54,6 +54,7 @@ experiments/leduc_poker/
   unbiased_escher_temporal_checkpoint_head_to_head/ Experiment 16 temporal H2H
   six_algorithm_final_policy_head_to_head/ Experiment 17 six-algorithm H2H
   ucv_escher_parallel_equivalence/      Experiment 18 parallel equivalence
+  four_algorithm_heldout_benchmark/     Frozen 4-algorithm, 8-seed benchmark
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner

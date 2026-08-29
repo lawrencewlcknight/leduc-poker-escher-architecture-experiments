@@ -81,6 +81,9 @@ exclude = [
 "experiments.leduc_poker.six_algorithm_final_policy_head_to_head" = [
   "README.md",
 ]
+"experiments.leduc_poker.four_algorithm_heldout_benchmark" = [
+  "README.md",
+]
 "experiments.leduc_poker.ucv_escher_parallel_equivalence" = [
   "README.md",
 ]
