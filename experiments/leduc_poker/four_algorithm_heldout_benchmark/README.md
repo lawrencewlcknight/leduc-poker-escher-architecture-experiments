@@ -88,10 +88,11 @@ formats, reloads all eight snapshots, recomputes exploitability, and completes
 both exact head-to-head pipelines. Its numerical results have no scientific
 meaning. It normally takes about one minute after dependencies are installed.
 
-The default cloud `run` command also submits a one-VM cloud smoke job and waits
-for it. Production is not submitted if that job fails. This additionally tests
-repository checkout, clean-environment dependency installation, service-account
-permissions, and Cloud Storage upload.
+The default cloud `run` command submits a lightweight remote controller and
+returns. The controller submits a one-VM cloud smoke job and waits for it inside
+Google Cloud. Production is not submitted if smoke fails. This additionally
+tests repository checkout, clean-environment dependency installation,
+service-account permissions, and Cloud Storage upload.
 
 ## One-command cloud run
 
@@ -110,27 +111,45 @@ export RUN_ID="leduc-heldout-$(date -u '+%Y%m%d-%H%M%S')"
 ./gcp/run_four_algorithm_heldout_benchmark.sh run
 ```
 
-That single command submits and waits for, in order:
+That single command submits one remote controller job and returns as soon as
+Google Cloud accepts it. The laptop can then be closed, disconnected, or
+switched off. The controller submits and waits for, in order:
 
 1. the mandatory cloud smoke job;
 2. the 32-task production training job;
 3. the exact aggregation and head-to-head job.
 
-The service account needs permission to run Batch jobs, act as the configured
-service account, write Cloud Logging entries, and read/write the chosen bucket.
+The controller uses the configured service account to create the child jobs.
+Consequently, `SA_EMAIL` needs `roles/batch.jobsEditor` on the project and
+`roles/iam.serviceAccountUser` on itself, as well as permission to write Cloud
+Logging entries and read/write the chosen bucket. An administrator can grant
+the two controller-specific roles with:
+
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/batch.jobsEditor"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --project="$PROJECT_ID" \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/iam.serviceAccountUser"
+```
+
 The project also needs sufficient regional quota for 256 concurrent N2 vCPUs
-when `PARALLELISM=32`.
+when `PARALLELISM=32`. The controller itself uses one small standard `e2-small`
+VM and remains alive only to submit and monitor the child jobs.
 
 Useful controls:
 
 ```bash
-# Generate and inspect all three Batch JSON files without submitting.
+# Generate the controller and three child Batch JSON files without submitting.
 ./gcp/run_four_algorithm_heldout_benchmark.sh dry-run
 
 # Inspect jobs created with an existing RUN_ID.
 ./gcp/run_four_algorithm_heldout_benchmark.sh status
 
-# Submit uniquely named retry jobs under the same artifact RUN_ID; completed workers are skipped.
+# Submit a remote recovery controller; completed workers are skipped.
 ./gcp/run_four_algorithm_heldout_benchmark.sh resume
 
 # Lower simultaneous quota demand.

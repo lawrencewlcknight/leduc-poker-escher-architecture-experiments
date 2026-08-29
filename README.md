@@ -126,21 +126,41 @@ export RUN_ID="leduc-heldout-$(date -u '+%Y%m%d-%H%M%S')"
 ./gcp/run_four_algorithm_heldout_benchmark.sh run
 ```
 
-The single `run` command submits a clean-environment cloud smoke job first. It
-submits the 32-task production job only if that smoke job succeeds, waits for
-training, and then submits the exact aggregation job. Standard VMs and 32-way
-parallelism are the defaults.
+The single `run` command submits a lightweight remote controller job and then
+returns. Once Google Cloud confirms that submission, the laptop can be closed,
+disconnected, or switched off. The controller submits a clean-environment cloud
+smoke job, submits the 32-task production job only if smoke succeeds, waits for
+training remotely, and finally submits exact aggregation. Standard training VMs
+and 32-way parallelism are the defaults.
+
+Because the controller creates the three child Batch jobs, its service account
+must have `roles/batch.jobsEditor` on the project and
+`roles/iam.serviceAccountUser` on the child-job service account (the same
+`SA_EMAIL` by default), in addition to the existing bucket permissions. For a
+dedicated Batch account, an administrator can grant the controller permissions
+with:
+
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/batch.jobsEditor"
+
+gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
+  --project="$PROJECT_ID" \
+  --member="serviceAccount:$SA_EMAIL" \
+  --role="roles/iam.serviceAccountUser"
+```
 
 Useful operational commands are:
 
 ```bash
-# Inspect the three Batch definitions without submitting them.
+# Inspect the controller and three child Batch definitions without submitting.
 ./gcp/run_four_algorithm_heldout_benchmark.sh dry-run
 
 # Check jobs associated with RUN_ID.
 ./gcp/run_four_algorithm_heldout_benchmark.sh status
 
-# Retry under the same artifact RUN_ID; validated completed workers are skipped.
+# Submit a remote recovery controller; validated completed workers are skipped.
 ./gcp/run_four_algorithm_heldout_benchmark.sh resume
 
 # Reduce simultaneous N2 quota use.

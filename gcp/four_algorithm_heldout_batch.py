@@ -58,7 +58,47 @@ cd "$ARCH_REPO"
 """.strip()
 
 
+def _controller_script(args) -> str:
+    """Return a lightweight remote controller that submits all child jobs."""
+    return f"""#!/usr/bin/env bash
+set -Eeuo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+export PYTHONUNBUFFERED=1
+ARCH_REPO_URL={_q(args.arch_repo_url)}
+ARCH_REPO_REF={_q(args.arch_repo_ref)}
+CONTROLLER_ACTION={_q(args.controller_action)}
+WORK_ROOT="/workspace/heldout-controller-${{BATCH_TASK_RETRY_ATTEMPT:-0}}"
+ARCH_REPO="$WORK_ROOT/architecture"
+
+if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi
+$SUDO apt-get update
+$SUDO apt-get install -y git ca-certificates python3
+mkdir -p "$WORK_ROOT"
+git clone --filter=blob:none "$ARCH_REPO_URL" "$ARCH_REPO"
+git -C "$ARCH_REPO" checkout --detach "$ARCH_REPO_REF"
+cd "$ARCH_REPO"
+
+export PROJECT_ID={_q(args.project_id)}
+export REGION={_q(args.region)}
+export BUCKET={_q(args.bucket_root.rstrip('/'))}
+export SA_EMAIL={_q(args.service_account)}
+export ARCH_REPO_REF={_q(args.arch_repo_ref)}
+export DEEP_CFR_REPO_REF={_q(args.deep_repo_ref)}
+export RUN_ID={_q(args.run_id)}
+export PARALLELISM={_q(args.parallelism)}
+export PROVISIONING_MODEL={_q(args.provisioning_model)}
+export MAX_RETRIES={_q(args.max_retries)}
+export HELDOUT_REMOTE_CONTROLLER=1
+
+echo "Remote controller is starting $CONTROLLER_ACTION for $RUN_ID"
+exec bash gcp/run_four_algorithm_heldout_benchmark.sh "$CONTROLLER_ACTION"
+"""
+
+
 def _script(args) -> str:
+    if args.kind == "controller":
+        return _controller_script(args)
     bootstrap = _bootstrap(args)
     if args.kind == "smoke":
         action = """
@@ -122,11 +162,28 @@ def build_job(args) -> dict:
         max_duration = "7200s"
         cpu_milli = 8000
         memory_mib = 30000
+    elif args.kind == "controller":
+        # The controller only submits and polls child jobs. Seven days covers
+        # reduced-parallelism runs without tying orchestration to a laptop.
+        max_duration = "604800s"
+        cpu_milli = 1000
+        memory_mib = 1500
     else:
         max_duration = "7200s"
         cpu_milli = 4000
         memory_mib = 15000
-    retries = args.max_retries
+    # A controller retry is safe because its orchestration actions first check
+    # for already-created child jobs and continue waiting instead of duplicating.
+    retries = 2 if args.kind == "controller" else args.max_retries
+    if args.kind == "controller":
+        machine_type = "e2-small"
+        boot_disk_size = 30
+    elif args.kind == "aggregate":
+        machine_type = "n2-standard-4"
+        boot_disk_size = 100
+    else:
+        machine_type = "n2-standard-8"
+        boot_disk_size = 100
     return {
         "taskGroups": [
             {
@@ -150,11 +207,16 @@ def build_job(args) -> dict:
             "instances": [
                 {
                     "policy": {
-                        "machineType": (
-                            "n2-standard-8" if args.kind != "aggregate" else "n2-standard-4"
+                        "machineType": machine_type,
+                        "provisioningModel": (
+                            "STANDARD"
+                            if args.kind == "controller"
+                            else args.provisioning_model
                         ),
-                        "provisioningModel": args.provisioning_model,
-                        "bootDisk": {"sizeGb": 100, "type": "pd-balanced"},
+                        "bootDisk": {
+                            "sizeGb": boot_disk_size,
+                            "type": "pd-balanced",
+                        },
                     }
                 }
             ],
@@ -169,7 +231,11 @@ def build_job(args) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--kind", choices=("smoke", "train", "aggregate"), required=True)
+    parser.add_argument(
+        "--kind",
+        choices=("controller", "smoke", "train", "aggregate"),
+        required=True,
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--bucket-root", required=True)
@@ -179,13 +245,26 @@ def main() -> None:
     parser.add_argument("--arch-repo-url", default=ARCH_REPO_URL)
     parser.add_argument("--deep-repo-url", default=DEEP_REPO_URL)
     parser.add_argument("--parallelism", type=int, default=32)
-    parser.add_argument("--provisioning-model", choices=("STANDARD", "SPOT"), default="STANDARD")
+    parser.add_argument(
+        "--provisioning-model",
+        choices=("STANDARD", "SPOT"),
+        default="STANDARD",
+    )
     parser.add_argument("--max-retries", type=int, default=0)
+    parser.add_argument("--project-id", default="")
+    parser.add_argument("--region", default="")
+    parser.add_argument(
+        "--controller-action",
+        choices=("orchestrate", "orchestrate-resume"),
+        default="orchestrate",
+    )
     args = parser.parse_args()
     if args.parallelism < 1 or args.parallelism > 32:
         parser.error("--parallelism must be between 1 and 32")
     if args.max_retries < 0 or args.max_retries > 10:
         parser.error("--max-retries must be between 0 and 10")
+    if args.kind == "controller" and (not args.project_id or not args.region):
+        parser.error("controller jobs require --project-id and --region")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "w", encoding="utf-8") as handle:
         json.dump(build_job(args), handle, indent=2)
