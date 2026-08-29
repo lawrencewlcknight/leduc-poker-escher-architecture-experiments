@@ -25,6 +25,10 @@ export PYTHONFAULTHANDLER=1
 export CUDA_VISIBLE_DEVICES=""
 export MPLCONFIGDIR=/tmp/matplotlib
 export XDG_CACHE_HOME=/tmp/cache
+export XDG_DATA_HOME=/tmp/data
+export UV_CACHE_DIR=/tmp/uv-cache
+export UV_PYTHON_INSTALL_DIR=/tmp/uv-python
+UV_INSTALL_DIR=/tmp/uv-bin
 
 ARCH_REPO_URL={_q(args.arch_repo_url)}
 DEEP_REPO_URL={_q(args.deep_repo_url)}
@@ -40,13 +44,15 @@ OUTPUT_ROOT="$WORK_ROOT/output"
 if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi
 $SUDO apt-get update
 $SUDO apt-get install -y git curl ca-certificates python3 python3-venv python3-dev build-essential
-mkdir -p "$WORK_ROOT" "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
+mkdir -p "$WORK_ROOT" "$MPLCONFIGDIR" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" \
+  "$UV_CACHE_DIR" "$UV_PYTHON_INSTALL_DIR" "$UV_INSTALL_DIR"
 git clone --filter=blob:none "$ARCH_REPO_URL" "$ARCH_REPO"
 git -C "$ARCH_REPO" checkout --detach "$ARCH_REPO_REF"
 git clone --filter=blob:none "$DEEP_REPO_URL" "$DEEP_REPO"
 git -C "$DEEP_REPO" checkout --detach "$DEEP_REPO_REF"
-curl -LsSf https://astral.sh/uv/install.sh | sh
-export PATH="$HOME/.local/bin:$PATH"
+curl -LsSf https://astral.sh/uv/install.sh | \
+  env UV_INSTALL_DIR="$UV_INSTALL_DIR" UV_NO_MODIFY_PATH=1 sh
+export PATH="$UV_INSTALL_DIR:$PATH"
 uv python install 3.9
 uv venv --python 3.9 --seed /tmp/heldout-benchmark-venv
 source /tmp/heldout-benchmark-venv/bin/activate

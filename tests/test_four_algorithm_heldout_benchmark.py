@@ -119,6 +119,13 @@ def test_batch_smoke_runs_all_four_implementations_before_production():
     script = group["taskSpec"]["runnables"][0]["script"]["text"]
     assert "four_algorithm_heldout_benchmark.run smoke" in script
     assert "--no-resume" in script
+    # Batch does not guarantee HOME in a runnable's environment. Keep the
+    # bootstrap self-contained under /tmp so `set -u` cannot fail after the uv
+    # installer succeeds.
+    assert "$HOME" not in script
+    assert "UV_INSTALL_DIR=/tmp/uv-bin" in script
+    assert "UV_NO_MODIFY_PATH=1" in script
+    assert 'export PATH="$UV_INSTALL_DIR:$PATH"' in script
 
 
 def test_remote_controller_owns_the_full_cloud_sequence():
@@ -262,4 +269,62 @@ exit 2
         "test-remote-run-smoke",
         "test-remote-run-train",
         "test-remote-run-aggregate",
+    ]
+
+
+def test_remote_resume_replaces_a_failed_smoke_before_training(tmp_path):
+    repository = Path(__file__).resolve().parents[1]
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    submitted_jobs = tmp_path / "submitted.log"
+    fake_gcloud = fake_bin / "gcloud"
+    fake_gcloud.write_text(
+        """#!/bin/sh
+if [ "$1 $2 $3" = "batch jobs submit" ]; then
+  printf "%s\\n" "$4" >> "$FAKE_SUBMITTED_JOBS"
+  exit 0
+fi
+if [ "$1 $2 $3" = "batch jobs describe" ]; then
+  if [ "$4" = "test-remote-run-smoke" ]; then
+    printf "FAILED\\n"
+    exit 0
+  fi
+  if grep -qx "$4" "$FAKE_SUBMITTED_JOBS" 2>/dev/null; then
+    printf "SUCCEEDED\\n"
+    exit 0
+  fi
+  exit 1
+fi
+exit 2
+""",
+        encoding="utf-8",
+    )
+    fake_gcloud.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "FAKE_SUBMITTED_JOBS": str(submitted_jobs),
+        "PROJECT_ID": "example-project",
+        "REGION": "europe-west2",
+        "BUCKET": "gs://example/results",
+        "SA_EMAIL": "batch@example.iam.gserviceaccount.com",
+        "ARCH_REPO_REF": "a" * 40,
+        "DEEP_CFR_REPO_REF": "b" * 40,
+        "RUN_ID": "test-remote-run",
+        "RESUME_TAG": "123456",
+        "HELDOUT_REMOTE_CONTROLLER": "1",
+    }
+    subprocess.run(
+        ["bash", "gcp/run_four_algorithm_heldout_benchmark.sh", "orchestrate-resume"],
+        cwd=repository,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=15,
+    )
+    assert submitted_jobs.read_text(encoding="utf-8").splitlines() == [
+        "test-remote-run-smoke-retry-123456",
+        "test-remote-run-retry-123456",
+        "test-remote-run-reaggregate-123456",
     ]

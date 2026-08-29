@@ -62,6 +62,7 @@ if [[ "$ACTION" == "resume" ]]; then
   CONTROLLER_ACTION="orchestrate-resume"
 elif [[ "$ACTION" == "orchestrate-resume" ]]; then
   RESUME_TAG="${RESUME_TAG:-$(date -u '+%H%M%S')}"
+  SMOKE_JOB="${RUN_ID}-smoke-retry-${RESUME_TAG}"
   TRAIN_JOB="${RUN_ID}-retry-${RESUME_TAG}"
   AGGREGATE_JOB="${RUN_ID}-reaggregate-${RESUME_TAG}"
   CONTROLLER_ACTION="orchestrate-resume"
@@ -221,14 +222,8 @@ case "$ACTION" in
       echo "orchestrate-resume is an internal action for the remote controller" >&2
       exit 2
     fi
-    if smoke_state="$(job_state "$SMOKE_JOB" 2>/dev/null)"; then
-      if [[ "$smoke_state" != "SUCCEEDED" ]]; then
-        wait_for_job "$SMOKE_JOB"
-      fi
-    else
-      submit_job "$SMOKE_JOB" "$TEMP_DIR/smoke.json"
-      wait_for_job "$SMOKE_JOB"
-    fi
+    complete_or_retry \
+      "${RUN_ID}-smoke" "$SMOKE_JOB" "$TEMP_DIR/smoke.json"
     complete_or_retry "${RUN_ID}-train" "$TRAIN_JOB" "$TEMP_DIR/train.json"
     complete_or_retry \
       "${RUN_ID}-aggregate" "$AGGREGATE_JOB" "$TEMP_DIR/aggregate.json"
