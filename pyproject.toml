@@ -90,6 +90,9 @@ exclude = [
 "experiments.leduc_poker.ucv_exact_tabular_validation" = [
   "README.md",
 ]
+"experiments.leduc_poker.deep_cfr_ucv_36h_plateau" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100

@@ -56,6 +56,7 @@ experiments/leduc_poker/
   ucv_escher_parallel_equivalence/      Experiment 18 parallel equivalence
   four_algorithm_heldout_benchmark/     Experiment 19 held-out benchmark
   ucv_exact_tabular_validation/          Experiment 20 exact UCV validation
+  deep_cfr_ucv_36h_plateau/              Experiment 21 36-hour convergence study
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1525,6 +1526,100 @@ gcloud storage ls "$BUCKET/$JOB_NAME/"
 The cleanup trap uploads outputs on success or failure. Detailed protocol,
 output definitions, validation criteria, and download interpretation are in
 `experiments/leduc_poker/ucv_exact_tabular_validation/README.md`.
+
+## Experiment 21: Deep CFR and UCV-ESCHER 36-hour convergence
+
+Experiment 21 extends Deep CFR and UCV-ESCHER to 36 active training hours over
+five seeds each. It saves a playable policy at the first completed iteration
+crossing every two-hour threshold, then computes exact exploitability for all
+180 policies. The analysis plots exploitability against both active training
+time and nodes touched and reports late-window changes over 24--30, 30--36 and
+24--36 hours.
+
+### Experiment 21 mandatory local smoke test
+
+Keep the Deep CFR repository at the sibling location described for Experiment
+19, then run:
+
+```bash
+./gcp/run_deep_cfr_ucv_36h_plateau.sh smoke-local
+```
+
+This runs tiny versions of both learners, creates and reloads every smoke
+checkpoint, performs exact policy evaluation and final head-to-head analysis,
+and renders both requested charts. Smoke values are not scientific results.
+
+### Experiment 21 GCP prerequisites
+
+Experiment 21 uses the same remote-controller service-account permissions as
+Experiment 19. No additional IAM roles are required if Experiment 19 completed
+successfully. Set the existing project, region, bucket and service account,
+plus immutable pushed commits for both repositories:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west2"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export ARCH_REPO_REF="$(git rev-parse HEAD)"
+export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
+export RUN_ID="exp21-36h-$(date -u '+%Y%m%d-%H%M%S')"
+```
+
+The architecture commit must include Experiment 21 and be pushed before
+submission. With the default ten-way parallelism, the selected region needs 80
+available N2 vCPUs. The workers use standard `n2-standard-8` VMs; Spot capacity
+is deliberately disabled because the playable checkpoints do not contain the
+optimizer and replay-buffer state required to resume a preempted trajectory.
+
+### Experiment 21 full GCP Batch run
+
+Submit the complete remote workflow with one command:
+
+```bash
+./gcp/run_deep_cfr_ucv_36h_plateau.sh run
+```
+
+After Batch accepts the controller, the laptop can be closed or switched off.
+The controller runs a clean cloud smoke, ten independent training tasks, and
+exact aggregation. At full parallelism, allow about 37--40 elapsed hours plus
+any VM provisioning delay. Successful training consumes 360 VM-hours; a
+prudent allowance including bootstrap, completed-iteration overshoot, smoke and
+aggregation is approximately 375--390 VM-hours. Each training task has a
+50-hour hard Batch limit, so an unexpectedly slow worker cannot run without
+bound.
+
+Useful commands are:
+
+```bash
+# Inspect all four Batch definitions without submitting them.
+./gcp/run_deep_cfr_ucv_36h_plateau.sh dry-run
+
+# Check jobs and print the artifact location for RUN_ID.
+./gcp/run_deep_cfr_ucv_36h_plateau.sh status
+
+# Recover a failed workflow; validated completed workers are reused.
+./gcp/run_deep_cfr_ucv_36h_plateau.sh resume
+
+# Lower simultaneous quota demand without changing successful VM-hours.
+PARALLELISM=5 ./gcp/run_deep_cfr_ucv_36h_plateau.sh run
+```
+
+Results are stored below `$BUCKET/$RUN_ID/`. Download them from the repository
+root with:
+
+```bash
+mkdir -p "cloud_outputs/$RUN_ID"
+gcloud storage cp -r "$BUCKET/$RUN_ID/*" "cloud_outputs/$RUN_ID/"
+```
+
+The two requested figures are
+`analysis/exploitability_by_training_time.png` and
+`analysis/exploitability_by_nodes_touched.png`. Exact checkpoint-level values,
+seed trajectories, summaries, late-window diagnostics and final 36-hour
+head-to-head results are retained as CSV and JSON files. See the
+[complete Experiment 21 protocol](experiments/leduc_poker/deep_cfr_ucv_36h_plateau/README.md)
+for the frozen seed/configuration contract and interpretation limits.
 
 ## Add an architecture experiment
 
