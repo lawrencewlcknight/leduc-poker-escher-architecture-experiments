@@ -150,6 +150,10 @@ def test_readmes_document_production_and_smoke_commands():
     ).read_text(encoding="utf-8")
     root_readme = (repository / "README.md").read_text(encoding="utf-8")
     for readme in (experiment_readme, root_readme):
+        assert "Experiment 20" in readme
         assert "ucv_exact_tabular_validation.run --smoke" in readme
         assert "ucv_exact_tabular_validation.run" in readme
         assert "n2-standard-8 172800 8000 32000 100" in readme
+    assert "Experiment 19: frozen four-algorithm held-out benchmark" in root_readme
+    assert "run_four_algorithm_heldout_benchmark.sh run" in root_readme
+    assert "roles/batch.jobsEditor" in root_readme

@@ -54,8 +54,8 @@ experiments/leduc_poker/
   unbiased_escher_temporal_checkpoint_head_to_head/ Experiment 16 temporal H2H
   six_algorithm_final_policy_head_to_head/ Experiment 17 six-algorithm H2H
   ucv_escher_parallel_equivalence/      Experiment 18 parallel equivalence
-  four_algorithm_heldout_benchmark/     Frozen 4-algorithm, 8-seed benchmark
-  ucv_exact_tabular_validation/          Exact 3-seed UCV estimator validation
+  four_algorithm_heldout_benchmark/     Experiment 19 held-out benchmark
+  ucv_exact_tabular_validation/          Experiment 20 exact UCV validation
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -80,49 +80,7 @@ python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 ```
 
-## Run the exact tabular UCV estimator validation
-
-This experiment trains UCV-ESCHER for seeds `0`, `1`, and `2` strictly
-sequentially. For each seed it freezes the first completed iterations crossing
-1.5M, 7.5M and 15M nodes, then enumerates exact conditional action-value and
-advantage moments for five estimator configurations over every reachable Leduc
-information-set/action pair and all three cross-fitting folds.
-
-Run the mandatory development smoke test first:
-
-```bash
-python -m experiments.leduc_poker.ucv_exact_tabular_validation.run --smoke \
-  --output-root outputs/smoke_tests
-```
-
-Run production locally with:
-
-```bash
-python -m experiments.leduc_poker.ucv_exact_tabular_validation.run \
-  --output-root outputs/ucv_exact_tabular_validation
-```
-
-For one fully remote GCP Batch job, set `PROJECT_ID`, `REGION`, `BUCKET`,
-`SA_EMAIL`, and `REPO_URL` as for the other experiments, then run:
-
-```bash
-JOB_NAME="leduc-ucv-exact-tabular-$(date -u +%Y%m%d-%H%M%S)"
-
-./gcp/submit_batch_experiment.sh \
-  "$JOB_NAME" \
-  "python -m experiments.leduc_poker.ucv_exact_tabular_validation.run \
-    --output-root outputs/cloud/$JOB_NAME" \
-  n2-standard-8 172800 8000 32000 100
-```
-
-The three production seeds require approximately 33.65 measured VM-hours and
-36 hours including diagnostics and aggregation. The command uses a 48-hour
-safety timeout. After submission, the job runs independently of the laptop.
-Detailed protocol, cloud smoke instructions, output definitions and validation
-criteria are in
-`experiments/leduc_poker/ucv_exact_tabular_validation/README.md`.
-
-## Run the frozen four-algorithm held-out benchmark
+## Experiment 19: frozen four-algorithm held-out benchmark
 
 This benchmark trains Deep CFR, VR-DeepDCFR+, VR-DeepPDCFR+, and UCV-ESCHER
 over eight frozen held-out seeds. Every run saves playable policies at the first
@@ -131,7 +89,7 @@ iteration crossing 11 active hours. The cloud launcher segments production into
 32 independent tasks (four algorithms by eight seeds) and runs the exact
 head-to-head analysis after training.
 
-### Mandatory local smoke test
+### Experiment 19 mandatory local smoke test
 
 Place the Deep CFR repository at the normal sibling workspace location:
 
@@ -152,38 +110,21 @@ training implementations with tiny budgets, writes both endpoint snapshots,
 reloads every snapshot as a playable OpenSpiel policy, and completes both exact
 head-to-head pipelines. Its numerical results are not scientifically meaningful.
 
-### Full Google Cloud Batch run
+### Experiment 19 GCP prerequisites
 
-Commit and push the repository before launching, then set immutable repository
-commits and the Google Cloud configuration:
+Experiment 19 uses a remote controller because its cloud smoke, 32 training
+workers, and aggregate analysis are separate Batch jobs. The project must have
+the Batch, Compute Engine, Cloud Logging, and Cloud Storage APIs enabled. In
+addition to the permissions used for earlier experiments, the service account
+must be able to create the controller's child Batch jobs and act as the service
+account attached to those jobs:
 
 ```bash
 export PROJECT_ID="your-project-id"
 export REGION="europe-west2"
 export BUCKET="gs://your-results-bucket/heldout-benchmarks"
 export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
-export ARCH_REPO_REF="$(git rev-parse HEAD)"
-export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
-export RUN_ID="leduc-heldout-$(date -u '+%Y%m%d-%H%M%S')"
 
-./gcp/run_four_algorithm_heldout_benchmark.sh run
-```
-
-The single `run` command submits a lightweight remote controller job and then
-returns. Once Google Cloud confirms that submission, the laptop can be closed,
-disconnected, or switched off. The controller submits a clean-environment cloud
-smoke job, submits the 32-task production job only if smoke succeeds, waits for
-training remotely, and finally submits exact aggregation. Standard training VMs
-and 32-way parallelism are the defaults.
-
-Because the controller creates the three child Batch jobs, its service account
-must have `roles/batch.jobsEditor` on the project and
-`roles/iam.serviceAccountUser` on the child-job service account (the same
-`SA_EMAIL` by default), in addition to the existing bucket permissions. For a
-dedicated Batch account, an administrator can grant the controller permissions
-with:
-
-```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:$SA_EMAIL" \
   --role="roles/batch.jobsEditor"
@@ -193,6 +134,33 @@ gcloud iam service-accounts add-iam-policy-binding "$SA_EMAIL" \
   --member="serviceAccount:$SA_EMAIL" \
   --role="roles/iam.serviceAccountUser"
 ```
+
+These grants are one-time setup operations. The account must also retain its
+existing Cloud Logging and selected-bucket read/write permissions. With the
+default `PARALLELISM=32`, confirm that the selected region has quota for 256
+concurrent N2 vCPUs. Use `PARALLELISM=16` below if only 128 are available.
+
+### Experiment 19 full GCP Batch run
+
+Commit and push the repository before launching, then set immutable repository
+commits and the Google Cloud configuration:
+
+```bash
+export ARCH_REPO_REF="$(git rev-parse HEAD)"
+export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
+export RUN_ID="leduc-heldout-$(date -u '+%Y%m%d-%H%M%S')"
+
+./gcp/run_four_algorithm_heldout_benchmark.sh run
+```
+
+`ARCH_REPO_REF` and `DEEP_CFR_REPO_REF` must resolve to pushed commits; they
+make all 32 workers use identical source. The single `run` command submits a
+lightweight remote controller job and then returns. Once Google Cloud confirms
+that submission, the laptop can be closed,
+disconnected, or switched off. The controller submits a clean-environment cloud
+smoke job, submits the 32-task production job only if smoke succeeds, waits for
+training remotely, and finally submits exact aggregation. Standard training VMs
+and 32-way parallelism are the defaults.
 
 Useful operational commands are:
 
@@ -215,6 +183,99 @@ See the
 for endpoint semantics, frozen seeds and configurations, runtime estimates,
 Spot VM trade-offs, service-account requirements, output structure, and the
 confirmatory versus descriptive analyses.
+
+## Experiment 20: exact tabular UCV estimator validation
+
+Experiment 20 is independent of Experiment 19. It trains only UCV-ESCHER for
+seeds `0`, `1`, and `2`, strictly sequentially on one VM. For each seed it
+freezes the first completed iterations crossing 1.5M, 7.5M and 15M nodes, then
+enumerates exact conditional action-value and advantage moments for five
+estimator configurations over every reachable Leduc information-set/action
+pair and all three cross-fitting folds.
+
+### Experiment 20 mandatory local smoke test
+
+Run the development smoke before allocating the production VM:
+
+```bash
+python -m experiments.leduc_poker.ucv_exact_tabular_validation.run --smoke \
+  --output-root outputs/smoke_tests
+```
+
+The smoke succeeds only if snapshot reloads, frozen-state invariants,
+predictability checks, exact enumeration, aggregation, and plotting all
+complete. Its numerical estimates are not scientific results.
+
+### Experiment 20 GCP prerequisites
+
+Experiment 20 uses the standard single-job Batch launcher and therefore needs
+no controller-specific IAM roles. Set the same values used by earlier single-VM
+experiments. `REPO_URL` must name the pushed repository containing Experiment
+20; the launcher clones its default branch when the VM starts.
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west2"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_URL="https://github.com/lawrencewlcknight/leduc-poker-escher-architecture-experiments.git"
+```
+
+The project must have the Batch, Compute Engine, Cloud Logging, and Cloud
+Storage APIs enabled. The configured Batch service account must retain its
+existing permission to write logs and upload objects beneath `$BUCKET`.
+
+### Experiment 20 GCP Batch smoke test
+
+This optional clean-environment smoke checks cloud checkout, installation,
+execution, and result upload as well as the experiment itself:
+
+```bash
+JOB_NAME="leduc-ucv-exp20-tabular-smoke-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.ucv_exact_tabular_validation.run --smoke \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-4 21600 4000 16000 100
+```
+
+Confirm that the Batch job is `SUCCEEDED` and that `aggregate_summary.json`
+reports `all_conditional_unbiasedness_checks_pass: true` and
+`predictability_audit_status: pass` before submitting production.
+
+### Experiment 20 full GCP Batch run
+
+Submit one standard eight-vCPU VM with a 48-hour safety timeout:
+
+```bash
+JOB_NAME="leduc-ucv-exp20-tabular-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.ucv_exact_tabular_validation.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 172800 8000 32000 100
+```
+
+The job runs all three seeds sequentially and is fully remote once Batch accepts
+it. Closing the laptop does not affect it. The measured training requirement is
+33.65 VM-hours; allow approximately 36 hours including diagnostics and
+aggregation. The 48-hour limit is a safety cap.
+
+Monitor the job and inspect its uploaded artifacts with:
+
+```bash
+gcloud batch jobs describe "$JOB_NAME" \
+  --project "$PROJECT_ID" \
+  --location "$REGION"
+
+gcloud storage ls "$BUCKET/$JOB_NAME/"
+```
+
+The cleanup trap uploads outputs on success or failure. Detailed protocol,
+output definitions, validation criteria, and download interpretation are in
+`experiments/leduc_poker/ucv_exact_tabular_validation/README.md`.
 
 ## Run the Experiment 28 baseline
 

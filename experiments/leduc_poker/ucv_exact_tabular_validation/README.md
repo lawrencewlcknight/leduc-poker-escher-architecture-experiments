@@ -1,4 +1,4 @@
-# Exact tabular validation of the UCV estimator
+# Experiment 20: exact tabular validation of the UCV estimator
 
 This is a single three-seed experiment that validates the implemented
 UCV-ESCHER estimator directly in tabular Leduc. Seeds `0`, `1`, and `2` run
@@ -49,7 +49,7 @@ and mean-squared errors by dynamic programming over the Leduc tree. It also:
   collection and updated afterwards;
 - saves replayable diagnostic network snapshots with SHA-256 digests.
 
-## Mandatory local smoke test
+## Experiment 20 mandatory local smoke test
 
 Run this before submitting the production job:
 
@@ -62,7 +62,7 @@ The smoke test uses development seed `99991`, tiny training settings and scaled
 30/150/300-node checkpoints. Its estimator results have no scientific meaning.
 It nevertheless exercises all three checkpoints, all five variants, every
 cross-fitting fold, exact aggregation, snapshot creation, invariant checks and
-plots. On the reference laptop it completed in approximately nine minutes.
+plots. On the reference laptop it completed in approximately two minutes.
 
 A successful smoke run has both of the following values in
 `aggregate_summary.json`:
@@ -74,7 +74,7 @@ A successful smoke run has both of the following values in
 }
 ```
 
-## Production run locally
+## Experiment 20 production run locally
 
 The production command needs no seed or checkpoint arguments because they are
 part of the frozen configuration:
@@ -87,14 +87,16 @@ python -m experiments.leduc_poker.ucv_exact_tabular_validation.run \
 The runner starts seed `0`, waits for it to finish, then starts seed `1`, and
 finally seed `2`. It never trains two seeds concurrently.
 
-## Production run as one GCP Batch job
+## Experiment 20 production run as one GCP Batch job
 
 Push the tested commit, then set the same Batch environment variables used by
-the other architecture experiments:
+the other architecture experiments. This single-job launcher needs no
+controller-specific IAM roles beyond the existing Batch, logging, and bucket
+permissions:
 
 ```bash
 export PROJECT_ID="your-project-id"
-export REGION="europe-west1"
+export REGION="europe-west2"
 export BUCKET="gs://your-escher-results-bucket"
 export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
 export REPO_URL="https://github.com/lawrencewlcknight/leduc-poker-escher-architecture-experiments.git"
@@ -103,7 +105,7 @@ export REPO_URL="https://github.com/lawrencewlcknight/leduc-poker-escher-archite
 Submit one standard eight-vCPU VM with a 48-hour safety timeout:
 
 ```bash
-JOB_NAME="leduc-ucv-exact-tabular-$(date -u +%Y%m%d-%H%M%S)"
+JOB_NAME="leduc-ucv-exp20-tabular-$(date -u +%Y%m%d-%H%M%S)"
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \
@@ -132,10 +134,10 @@ The Batch cleanup trap uploads outputs on both success and failure:
 $BUCKET/$JOB_NAME/
 ```
 
-## Optional GCP smoke test
+## Experiment 20 optional GCP smoke test
 
 ```bash
-JOB_NAME="leduc-ucv-exact-tabular-smoke-$(date -u +%Y%m%d-%H%M%S)"
+JOB_NAME="leduc-ucv-exp20-tabular-smoke-$(date -u +%Y%m%d-%H%M%S)"
 
 ./gcp/submit_batch_experiment.sh \
   "$JOB_NAME" \

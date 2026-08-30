@@ -1,4 +1,4 @@
-# Frozen four-algorithm held-out benchmark
+# Experiment 19: frozen four-algorithm held-out benchmark
 
 ## Purpose and confirmatory contract
 
