@@ -157,3 +157,9 @@ def test_readmes_document_production_and_smoke_commands():
     assert "Experiment 19: frozen four-algorithm held-out benchmark" in root_readme
     assert "run_four_algorithm_heldout_benchmark.sh run" in root_readme
     assert "roles/batch.jobsEditor" in root_readme
+    assert (
+        root_readme.index("## Experiment 18:")
+        < root_readme.index("## Experiment 19:")
+        < root_readme.index("## Experiment 20:")
+        < root_readme.index("## Add an architecture experiment")
+    )
