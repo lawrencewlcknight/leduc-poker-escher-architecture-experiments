@@ -57,6 +57,7 @@ experiments/leduc_poker/
   four_algorithm_heldout_benchmark/     Experiment 19 held-out benchmark
   ucv_exact_tabular_validation/          Experiment 20 exact UCV validation
   deep_cfr_ucv_36h_plateau/              Experiment 21 36-hour convergence study
+  ucv_three_arm_15m_simplification/      Experiment 22 long-horizon simplification
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1620,6 +1621,58 @@ seed trajectories, summaries, late-window diagnostics and final 36-hour
 head-to-head results are retained as CSV and JSON files. See the
 [complete Experiment 21 protocol](experiments/leduc_poker/deep_cfr_ucv_36h_plateau/README.md)
 for the frozen seed/configuration contract and interpretation limits.
+
+## Experiment 22: three-arm UCV simplification at 15 million nodes
+
+Experiment 22 compares complete UCV-ESCHER, fixed `beta=1`, and two
+cross-fitted critics over six fresh paired development seeds. Every worker
+stops at the first completed iteration crossing 15 million training nodes and
+saves a playable final policy. The 18 algorithm/seed runs are independent
+standard `n2-standard-8` Batch tasks.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_ucv_three_arm_15m_simplification.sh smoke-local
+```
+
+For the fully remote GCP workflow, reuse the Experiment 19/21 project, bucket,
+region and controller service account, then set the pushed Experiment 22
+commit:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export RUN_ID="exp22-simpl-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=18
+
+./gcp/run_ucv_three_arm_15m_simplification.sh run
+```
+
+Once Batch accepts the remote controller, the laptop may be disconnected or
+switched off. Full parallelism requires 144 N2 vCPUs and should complete in
+approximately 10--13 elapsed hours. Budget approximately 155--170 N2 VM-hours
+including the dense mechanism diagnostics, bootstrap, smoke and aggregation.
+Every production task has a 20-hour hard limit.
+
+Operational commands are:
+
+```bash
+./gcp/run_ucv_three_arm_15m_simplification.sh dry-run
+./gcp/run_ucv_three_arm_15m_simplification.sh status
+./gcp/run_ucv_three_arm_15m_simplification.sh resume
+```
+
+The aggregate analysis reports paired exploitability, runtime and memory
+effects; exact sign-flip tests; a predeclared `0.01` non-inferiority margin;
+trajectory plots; calibration reliability by information-set/action; beta and
+prediction-gate behaviour; correction magnitude; realised target variance
+relative to fixed `beta=1`; and the association between critic error and the
+next iteration's local regret. See the
+[complete Experiment 22 protocol](experiments/leduc_poker/ucv_three_arm_15m_simplification/README.md).
 
 ## Add an architecture experiment
 

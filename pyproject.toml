@@ -93,6 +93,9 @@ exclude = [
 "experiments.leduc_poker.deep_cfr_ucv_36h_plateau" = [
   "README.md",
 ]
+"experiments.leduc_poker.ucv_three_arm_15m_simplification" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100

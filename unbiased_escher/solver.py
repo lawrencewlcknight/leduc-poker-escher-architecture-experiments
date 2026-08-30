@@ -671,6 +671,14 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         stats["correction_abs_sum"] += abs(estimate.importance_correction)
         stats["centering_abs_sum"] += abs(estimate.policy_weighted_advantage)
 
+    def _record_detailed_estimate_diagnostics(self, **_context) -> None:
+        """Optional per-state diagnostic hook used by dedicated experiments.
+
+        Production solvers intentionally do nothing here.  A subclass can
+        consume the already-computed estimator inputs without changing the
+        estimator, sampling policy, random-number stream, or training targets.
+        """
+
     def evaluate(self, **kwargs):
         stats = self._architecture_stats
         count = stats["count"]
@@ -785,7 +793,6 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
         if player == -4:
             return state.returns()[traverser] / self.max_utility
 
-        legal_actions = state.legal_actions()
         legal_mask = np.asarray(state.legal_actions_mask(), dtype=float)
         policy = self.regret_trainers[player].get_policy(state, self.num_iteration)
         q_values, disagreement = self.q_value_trainer.get_baseline_and_disagreement(
@@ -882,6 +889,23 @@ class UnbiasedControlVariateEscher(VRDeepPDCFRPlus):
             disagreement=float(disagreement[action]),
             estimate=estimate,
         )
+        if player == traverser:
+            self._record_detailed_estimate_diagnostics(
+                state=state,
+                traverser=int(traverser),
+                sampled_action=int(action),
+                sample_probability=float(sample_probability),
+                sampled_return=float(sampled_return),
+                q_values=np.asarray(q_values, dtype=np.float64),
+                beta=np.asarray(beta, dtype=np.float64),
+                residual_means=np.asarray(residual_means, dtype=np.float64),
+                predicted_variances=np.asarray(
+                    predicted_variances, dtype=np.float64
+                ),
+                policy=np.asarray(policy, dtype=np.float64),
+                legal_mask=np.asarray(legal_mask, dtype=np.float64),
+                estimate=estimate,
+            )
 
         if player == traverser:
             self.regret_trainers[player].add_data(
