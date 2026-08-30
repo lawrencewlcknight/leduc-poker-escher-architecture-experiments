@@ -55,6 +55,7 @@ experiments/leduc_poker/
   six_algorithm_final_policy_head_to_head/ Experiment 17 six-algorithm H2H
   ucv_escher_parallel_equivalence/      Experiment 18 parallel equivalence
   four_algorithm_heldout_benchmark/     Frozen 4-algorithm, 8-seed benchmark
+  ucv_exact_tabular_validation/          Exact 3-seed UCV estimator validation
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -78,6 +79,48 @@ python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
 python -m pip install -e .
 ```
+
+## Run the exact tabular UCV estimator validation
+
+This experiment trains UCV-ESCHER for seeds `0`, `1`, and `2` strictly
+sequentially. For each seed it freezes the first completed iterations crossing
+1.5M, 7.5M and 15M nodes, then enumerates exact conditional action-value and
+advantage moments for five estimator configurations over every reachable Leduc
+information-set/action pair and all three cross-fitting folds.
+
+Run the mandatory development smoke test first:
+
+```bash
+python -m experiments.leduc_poker.ucv_exact_tabular_validation.run --smoke \
+  --output-root outputs/smoke_tests
+```
+
+Run production locally with:
+
+```bash
+python -m experiments.leduc_poker.ucv_exact_tabular_validation.run \
+  --output-root outputs/ucv_exact_tabular_validation
+```
+
+For one fully remote GCP Batch job, set `PROJECT_ID`, `REGION`, `BUCKET`,
+`SA_EMAIL`, and `REPO_URL` as for the other experiments, then run:
+
+```bash
+JOB_NAME="leduc-ucv-exact-tabular-$(date -u +%Y%m%d-%H%M%S)"
+
+./gcp/submit_batch_experiment.sh \
+  "$JOB_NAME" \
+  "python -m experiments.leduc_poker.ucv_exact_tabular_validation.run \
+    --output-root outputs/cloud/$JOB_NAME" \
+  n2-standard-8 172800 8000 32000 100
+```
+
+The three production seeds require approximately 33.65 measured VM-hours and
+36 hours including diagnostics and aggregation. The command uses a 48-hour
+safety timeout. After submission, the job runs independently of the laptop.
+Detailed protocol, cloud smoke instructions, output definitions and validation
+criteria are in
+`experiments/leduc_poker/ucv_exact_tabular_validation/README.md`.
 
 ## Run the frozen four-algorithm held-out benchmark
 

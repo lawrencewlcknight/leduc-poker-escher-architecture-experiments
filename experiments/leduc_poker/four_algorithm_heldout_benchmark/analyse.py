@@ -16,6 +16,7 @@ import pyspiel  # noqa: E402
 from open_spiel.python import policy  # noqa: E402
 from open_spiel.python.algorithms import expected_game_score, exploitability  # noqa: E402
 
+from escher_poker.chart_titles import set_chart_title  # noqa: E402
 from experiments.leduc_poker.six_algorithm_final_policy_head_to_head.policies import (  # noqa: E402
     load_policy,
     validate_policy_probabilities,
@@ -66,7 +67,7 @@ def _plot_matrix(matrix: np.ndarray, output_path: Path, endpoint_id: str) -> Non
     ax.set_yticks(range(len(labels)), labels)
     ax.set_xlabel("Opponent")
     ax.set_ylabel("Algorithm")
-    ax.set_title(f"Held-out exact two-seat EV: {endpoint_id}")
+    set_chart_title(ax, f"Held-out exact two-seat EV: {endpoint_id}")
     for row in range(matrix.shape[0]):
         for column in range(matrix.shape[1]):
             ax.text(column, row, f"{matrix[row, column]:.3f}", ha="center", va="center")
@@ -92,7 +93,7 @@ def _plot_exploitability(rows: Sequence[Mapping], output_path: Path, endpoint_id
     ax.bar(np.arange(len(labels)), means, yerr=sems, capsize=4)
     ax.set_xticks(np.arange(len(labels)), labels, rotation=25, ha="right")
     ax.set_ylabel("Exploitability (NashConv / 2)")
-    ax.set_title(f"Held-out endpoint exploitability: {endpoint_id}")
+    set_chart_title(ax, f"Held-out endpoint exploitability: {endpoint_id}")
     fig.tight_layout()
     fig.savefig(output_path, dpi=200)
     plt.close(fig)

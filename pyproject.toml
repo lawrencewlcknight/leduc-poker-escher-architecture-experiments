@@ -87,6 +87,9 @@ exclude = [
 "experiments.leduc_poker.ucv_escher_parallel_equivalence" = [
   "README.md",
 ]
+"experiments.leduc_poker.ucv_exact_tabular_validation" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100
