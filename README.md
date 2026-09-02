@@ -58,6 +58,7 @@ experiments/leduc_poker/
   ucv_exact_tabular_validation/          Experiment 20 exact UCV validation
   deep_cfr_ucv_36h_plateau/              Experiment 21 36-hour convergence study
   ucv_three_arm_15m_simplification/      Experiment 22 long-horizon simplification
+  ucv_24h_stability_development/          Experiment 23 UCV stability development
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1673,6 +1674,48 @@ prediction-gate behaviour; correction magnitude; realised target variance
 relative to fixed `beta=1`; and the association between critic error and the
 next iteration's local regret. See the
 [complete Experiment 22 protocol](experiments/leduc_poker/ucv_three_arm_15m_simplification/README.md).
+
+## Experiment 23: 24-hour UCV stability development study
+
+Experiment 23 uses four fresh paired development seeds to compare Original
+UCV, a fixed-`beta=1` two-critic fast core, that core with the instantaneous
+predictor removed, and a stable non-predictive core with late cosine learning-
+rate decay and gradient clipping. Each of the 16 independent
+`n2-standard-8` workers saves playable policies every two active hours through
+24 hours and at the first completed iteration crossing 15 million nodes.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_ucv_24h_stability_development.sh smoke-local
+```
+
+Then reuse the existing GCP configuration and set the pushed Experiment 23
+commit:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export RUN_ID="exp23-stab-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=16
+
+./gcp/run_ucv_24h_stability_development.sh run
+```
+
+The remote controller owns smoke, production and exact aggregation, so the
+laptop may be disconnected after submission. Full parallelism needs 128 N2
+vCPUs and should take approximately 25--30 elapsed hours. Budget roughly
+400--440 N2 VM-hours; each training worker has an independent 36-hour hard
+limit and no automatic retry.
+
+Use the same environment with `status`, `resume`, or `dry-run`. The analysis
+pre-specifies mean exploitability over 12--24 hours, checkpoint volatility,
+continued late improvement, 15-million-node performance and throughput. It
+also produces exact exploitability-by-time and exploitability-by-node charts.
+See the [complete Experiment 23 protocol](experiments/leduc_poker/ucv_24h_stability_development/README.md).
 
 ## Add an architecture experiment
 

@@ -7,6 +7,7 @@ from .estimator import (
     variance_optimal_beta,
 )
 from .solver import UnbiasedControlVariateEscher
+from .stability import StableUnbiasedControlVariateEscher
 
 
 def __getattr__(name):
@@ -19,6 +20,7 @@ def __getattr__(name):
 __all__ = [
     "ControlVariateEstimate",
     "UnbiasedControlVariateEscher",
+    "StableUnbiasedControlVariateEscher",
     "ParallelUnbiasedControlVariateEscher",
     "control_variate_advantage",
     "residual_adaptive_sampling_policy",
