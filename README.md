@@ -59,6 +59,7 @@ experiments/leduc_poker/
   deep_cfr_ucv_36h_plateau/              Experiment 21 36-hour convergence study
   ucv_three_arm_15m_simplification/      Experiment 22 long-horizon simplification
   ucv_24h_stability_development/          Experiment 23 UCV stability development
+  selected_ucv_36h_confirmation/          Experiment 24 selected UCV 36-hour follow-up
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1716,6 +1717,56 @@ pre-specifies mean exploitability over 12--24 hours, checkpoint volatility,
 continued late improvement, 15-million-node performance and throughput. It
 also produces exact exploitability-by-time and exploitability-by-node charts.
 See the [complete Experiment 23 protocol](experiments/leduc_poker/ucv_24h_stability_development/README.md).
+
+## Experiment 24: selected UCV architecture at 36 hours
+
+Experiment 24 trains the non-predictive fast core selected after Experiment 23
+for 36 active hours on the same five seeds used in Experiment 21. The selected
+architecture uses fixed `beta=1`, two cross-fitted critics and no instantaneous
+predictor while retaining residual calibration and residual-adaptive
+full-support sampling. It retains the original constant learning rate and does
+not use the unsuccessful annealing/clipping package.
+
+Each of five independent `n2-standard-8` workers saves playable policies every
+two active hours through 36 hours and at the first completed iteration crossing
+15 million nodes. Aggregation verifies and imports the immutable Experiment 21
+archive, then creates new three-algorithm charts for Deep CFR, Original UCV and
+the selected architecture. Experiment 21 itself is not modified.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_selected_ucv_36h_confirmation.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and immutable Deep CFR reference:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
+export EXP21_RUN_ID="exp21-36h-20260830-141641"
+export RUN_ID="exp24-selected-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_selected_ucv_36h_confirmation.sh run
+```
+
+The controller owns cloud smoke, production and aggregation, so the laptop may
+be disconnected after submission. Full parallelism requires 40 regional N2
+vCPUs and should take approximately 37--40 elapsed hours. Budget approximately
+190--200 N2 VM-hours including bootstrap, overshoot, smoke and aggregation;
+each training worker has a 50-hour hard limit and no automatic retry.
+
+Use the same environment with `status`, `resume`, or `dry-run`. The analysis
+reports the pre-specified 24--36-hour mean and final exploitability, late-window
+stability, throughput, 15-million-node performance and final exact head-to-head
+effects. The use of already examined Experiment 21 seeds is declared as paired
+post-selection follow-up evidence, not a new held-out confirmation. See the
+[complete Experiment 24 protocol](experiments/leduc_poker/selected_ucv_36h_confirmation/README.md).
 
 ## Add an architecture experiment
 
