@@ -60,6 +60,7 @@ experiments/leduc_poker/
   ucv_three_arm_15m_simplification/      Experiment 22 long-horizon simplification
   ucv_24h_stability_development/          Experiment 23 UCV stability development
   selected_ucv_36h_confirmation/          Experiment 24 selected UCV 36-hour follow-up
+  ucv_residual_target_factorial/           Experiment 25 residual/target 2x2 factorial
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1767,6 +1768,51 @@ stability, throughput, 15-million-node performance and final exact head-to-head
 effects. The use of already examined Experiment 21 seeds is declared as paired
 post-selection follow-up evidence, not a new held-out confirmation. See the
 [complete Experiment 24 protocol](experiments/leduc_poker/selected_ucv_36h_confirmation/README.md).
+
+## Experiment 25: residual-regret by averaged-critic-target factorial
+
+Experiment 25 starts from the non-predictive fast core selected in Experiment
+23 and independently tests two stability interventions: deeper
+residual-LayerNorm cumulative-regret networks and four-fit temporally averaged
+critic targets. The paired 2x2 design comprises four arms and three fresh
+development seeds, giving 12 independent 36-active-hour workers.
+
+Each worker saves playable policies every two active hours and at 15 million
+nodes. It also saves complete resumable training states at 24 and 36 hours.
+Exact aggregation reports hours 24--36 performance, convergence slope,
+checkpoint RMSSD, worst rebound, equal-node performance, throughput, factorial
+main effects and their interaction. An exact tabular-average diagnostic
+separates regret-learning behaviour from average-policy distillation error.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_ucv_residual_target_factorial.sh smoke-local
+```
+
+Then reuse the existing cloud configuration:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export RUN_ID="exp25-fact-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=12
+
+./gcp/run_ucv_residual_target_factorial.sh run
+```
+
+The remote controller owns smoke, production and aggregation, so the laptop may
+be disconnected after submission. Full parallelism requires 96 regional N2
+vCPUs. Budget approximately 450--480 N2 VM-hours and allow about 40--44 elapsed
+hours plus provisioning. Training tasks use on-demand `n2-standard-8` VMs, have
+a 54-hour per-attempt hard limit and no automatic retry. Continuation states are
+uploaded at 24 and 36 hours; use the same `RUN_ID` with `resume` after a failure.
+
+See the
+[complete Experiment 25 protocol](experiments/leduc_poker/ucv_residual_target_factorial/README.md).
 
 ## Add an architecture experiment
 
