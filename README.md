@@ -61,6 +61,7 @@ experiments/leduc_poker/
   ucv_24h_stability_development/          Experiment 23 UCV stability development
   selected_ucv_36h_confirmation/          Experiment 24 selected UCV 36-hour follow-up
   ucv_residual_target_factorial/           Experiment 25 residual/target 2x2 factorial
+  ucv_advantage_replay_36h/                 Experiment 26 direct-advantage replay
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1813,6 +1814,59 @@ uploaded at 24 and 36 hours; use the same `RUN_ID` with `resume` after a failure
 
 See the
 [complete Experiment 25 protocol](experiments/leduc_poker/ucv_residual_target_factorial/README.md).
+
+## Experiment 26: UCV direct-advantage replay at 36 hours
+
+Experiment 26 is the bolder UCV redesign motivated by the long-horizon
+volatility in Experiment 21. It starts from Experiment 23's non-predictive fast
+core, retains the model-free UCV external-sampling estimator, and replaces the
+recursively fitted cumulative-regret target with a persistent Deep-CFR-style
+reservoir of instantaneous UCV advantages. Player-specific networks fit those
+utility-normalised observations directly with linear iteration weighting; the
+previous fitted network is never used as the next target.
+
+Five independent `n2-standard-8` workers use the same five seeds as Experiment
+21. Each saves playable policies every two active hours through 36 hours and at
+the first completed iteration crossing 15 million nodes. Aggregation imports
+the immutable Experiment 21 archive and produces joined exact-exploitability
+charts against Deep CFR and Original UCV by training time and nodes touched,
+plus late-window, throughput and final head-to-head summaries.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_ucv_advantage_replay_36h.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and immutable Experiment 21 Deep
+CFR reference:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
+export EXP21_RUN_ID="exp21-36h-20260830-141641"
+export RUN_ID="exp26-replay-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_ucv_advantage_replay_36h.sh run
+```
+
+The remote controller owns smoke, production and aggregation, so the laptop may
+be disconnected after submission. Full parallelism requires 40 regional N2
+vCPUs and should take approximately 37--40 elapsed hours. Budget approximately
+190--200 N2 VM-hours; each training worker has a 50-hour hard limit and no
+automatic retry. Use the same environment with `status`, `resume`, or
+`dry-run`.
+
+The joined reuse of Experiment 21 seeds is paired architecture-development
+evidence, not a new held-out confirmation. Because the new arm also includes
+the Experiment 23 fast-core changes, its difference from Original UCV is not a
+replay-only causal effect. See the
+[complete Experiment 26 protocol](experiments/leduc_poker/ucv_advantage_replay_36h/README.md).
 
 ## Add an architecture experiment
 
