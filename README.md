@@ -62,6 +62,7 @@ experiments/leduc_poker/
   selected_ucv_36h_confirmation/          Experiment 24 selected UCV 36-hour follow-up
   ucv_residual_target_factorial/           Experiment 25 residual/target 2x2 factorial
   ucv_advantage_replay_36h/                 Experiment 26 direct-advantage replay
+  average_policy_redistillation/            Experiment 27 offline average-policy distillation
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1867,6 +1868,48 @@ evidence, not a new held-out confirmation. Because the new arm also includes
 the Experiment 23 fast-core changes, its difference from Original UCV is not a
 replay-only causal effect. See the
 [complete Experiment 26 protocol](experiments/leduc_poker/ucv_advantage_replay_36h/README.md).
+
+## Experiment 27: isolated average-policy redistillation
+
+Experiment 27 reuses the frozen 24- and 36-hour continuation states from the
+Experiment 25 averaged-critic-target arm. It does not rerun UCV training. It
+first separates exact-average, empirical-reservoir and neural-fitting error,
+then compares weighted MSE with soft-target cross-entropy and reset fitting with
+warm-started fitting in a paired `2x2` design. Three optimiser fits are nested
+within each of the three source trajectories; the source trajectory remains the
+inferential unit. An exact-table-supervised neural arm is retained strictly as
+a diagnostic capacity bound.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_average_policy_redistillation.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and Experiment 25 archive:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP25_RUN_ID="exp25-fact-20260906-003836"
+export RUN_ID="exp27-distill-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=3
+
+./gcp/run_average_policy_redistillation.sh run
+```
+
+The remote controller owns smoke, production and aggregation, so the laptop
+may be disconnected after submission. Three on-demand `n2-standard-8` workers
+run in parallel. Each downloads only its own two Experiment 25 source states
+(approximately 4.6--5.2 GB), not the full archive, and has a 12-hour hard
+limit. This is an offline fitting study and should be much cheaper than a new
+36-hour training experiment.
+
+See the
+[complete Experiment 27 protocol](experiments/leduc_poker/average_policy_redistillation/README.md).
 
 ## Add an architecture experiment
 
