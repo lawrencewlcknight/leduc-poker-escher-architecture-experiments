@@ -76,6 +76,11 @@ laptop may then be disconnected. The controller runs a clean cloud smoke before
 submitting production, waits for all workers, aggregates exact policies, and
 uploads the results.
 
+Production diagnostics are merged with bounded memory: the aggregator streams
+the large per-worker critic and exact-oracle CSVs directly into their combined
+outputs rather than materialising all rows as Python dictionaries. Aggregation
+memory therefore remains independent of the accumulated diagnostic row count.
+
 At each 24- and 36-hour continuation checkpoint the worker immediately uploads
 its partial task directory. If a task subsequently fails, retain the original
 `RUN_ID` and run:

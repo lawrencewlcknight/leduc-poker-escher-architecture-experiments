@@ -10,6 +10,9 @@ import pytest
 import torch
 
 from experiments.leduc_poker.four_algorithm_heldout_benchmark.config import HELDOUT_SEEDS
+from experiments.leduc_poker.ucv_residual_target_factorial.analyse import (
+    _stream_merged_csv,
+)
 from experiments.leduc_poker.ucv_residual_target_factorial.config import (
     AVERAGED_TARGET_ONLY,
     COMBINED,
@@ -160,6 +163,30 @@ def test_temporal_target_is_parameter_mean_of_completed_fits():
     assert len(member.target_history) == 4
     for parameter in member.target_model.parameters():
         assert torch.allclose(parameter, torch.full_like(parameter, 3.5))
+
+
+def test_large_diagnostic_csvs_are_merged_as_streams(tmp_path):
+    first = tmp_path / "first.csv"
+    second = tmp_path / "second.csv"
+    output = tmp_path / "merged.csv"
+    first.write_text("metric,value\nalpha,1\nbeta,2\n")
+    second.write_text("metric,value\ngamma,3\n")
+
+    count = _stream_merged_csv(
+        output,
+        (
+            (first, CONTROL, 11),
+            (second, RESIDUAL_ONLY, 13),
+        ),
+    )
+
+    assert count == 3
+    assert output.read_text().splitlines() == [
+        "metric,seed,value,variant_id",
+        f"alpha,11,1,{CONTROL}",
+        f"beta,11,2,{CONTROL}",
+        f"gamma,13,3,{RESIDUAL_ONLY}",
+    ]
 
 
 def test_full_state_resume_reproduces_next_iteration():

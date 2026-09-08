@@ -56,6 +56,39 @@ def _read_csv(path: Path) -> list[dict]:
         return list(csv.DictReader(handle))
 
 
+def _stream_merged_csv(
+    output: Path, sources: Sequence[tuple[Path, str, int]]
+) -> int:
+    """Merge worker CSVs without retaining their rows in memory."""
+    fields: set[str] = set()
+    for path, _, _ in sources:
+        if not path.is_file() or path.stat().st_size == 0:
+            continue
+        with open(path, newline="", encoding="utf-8") as handle:
+            first = next(csv.DictReader(handle), None)
+        if first is not None:
+            fields.update(first)
+    if fields:
+        fields.update(("variant_id", "seed"))
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = output.with_suffix(output.suffix + ".tmp")
+    row_count = 0
+    with open(temporary, "w", newline="", encoding="utf-8") as output_handle:
+        writer = csv.DictWriter(output_handle, fieldnames=sorted(fields))
+        writer.writeheader()
+        for path, variant_id, seed in sources:
+            if not path.is_file() or path.stat().st_size == 0:
+                continue
+            with open(path, newline="", encoding="utf-8") as source_handle:
+                for row in csv.DictReader(source_handle):
+                    row.update({"variant_id": variant_id, "seed": seed})
+                    writer.writerow(row)
+                    row_count += 1
+    temporary.replace(output)
+    return row_count
+
+
 def _checkpoint_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dict]:
     grouped = defaultdict(list)
     for row in rows:
@@ -498,7 +531,15 @@ def aggregate_workers(
 
     game = pyspiel.load_game(GAME_NAME)
     inventory, state_inventory, metrics, manifest, curves = [], [], [], [], []
-    information_rows, beta_rows, critic_rows, q_oracle_rows = [], [], [], []
+    streamed_artifacts = {
+        artifact_id: []
+        for artifact_id in (
+            "information_action_diagnostics",
+            "beta_histogram",
+            "critic_error_subsequent_local_regret",
+            "exact_q_oracle_diagnostics",
+        )
+    }
     for key in sorted(results):
         result_path, result = results[key]
         root = result_path.parent
@@ -549,18 +590,14 @@ def aggregate_workers(
             state_inventory.append(
                 {"variant_id": key[0], "seed": key[1], **record, "path": str(state.resolve())}
             )
-        artifact_targets = (
-            ("checkpoint_curves", curves),
-            ("information_action_diagnostics", information_rows),
-            ("beta_histogram", beta_rows),
-            ("critic_error_subsequent_local_regret", critic_rows),
-            ("exact_q_oracle_diagnostics", q_oracle_rows),
-        )
-        for artifact_id, destination in artifact_targets:
-            rows = _read_csv(root / result["artifacts"][artifact_id])
-            for row in rows:
-                row.update({"variant_id": key[0], "seed": key[1]})
-            destination.extend(rows)
+        rows = _read_csv(root / result["artifacts"]["checkpoint_curves"])
+        for row in rows:
+            row.update({"variant_id": key[0], "seed": key[1]})
+        curves.extend(rows)
+        for artifact_id, sources in streamed_artifacts.items():
+            sources.append(
+                (root / result["artifacts"][artifact_id], key[0], key[1])
+            )
         manifest.append(
             {
                 "variant_id": key[0],
@@ -589,10 +626,12 @@ def aggregate_workers(
     write_csv(output_dir / "factorial_effects_by_seed.csv", factorial_rows)
     write_csv(output_dir / "factorial_effect_summary.csv", factorial_summaries)
     write_csv(output_dir / "training_checkpoint_curves.csv", curves)
-    write_csv(output_dir / "information_action_diagnostics.csv", information_rows)
-    write_csv(output_dir / "beta_histogram.csv", beta_rows)
-    write_csv(output_dir / "critic_error_subsequent_local_regret.csv", critic_rows)
-    write_csv(output_dir / "exact_q_oracle_diagnostics.csv", q_oracle_rows)
+    streamed_row_counts = {
+        artifact_id: _stream_merged_csv(
+            output_dir / f"{artifact_id}.csv", sources
+        )
+        for artifact_id, sources in streamed_artifacts.items()
+    }
     _plot_trajectory(
         metrics,
         checkpoint_summaries,
@@ -615,6 +654,7 @@ def aggregate_workers(
         "num_snapshots": len(inventory),
         "num_training_states": len(state_inventory),
         "num_exact_policy_evaluations": len(metrics),
+        "streamed_diagnostic_row_counts": streamed_row_counts,
         "repository_commit": next(iter(commits)),
         "contract": contract_manifest(),
         "factorial_effect_summary": factorial_summaries,
