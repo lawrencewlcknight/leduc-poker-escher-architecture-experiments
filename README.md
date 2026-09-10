@@ -63,6 +63,7 @@ experiments/leduc_poker/
   ucv_residual_target_factorial/           Experiment 25 residual/target 2x2 factorial
   ucv_advantage_replay_36h/                 Experiment 26 direct-advantage replay
   average_policy_redistillation/            Experiment 27 offline average-policy distillation
+  information_set_stratified_distillation/  Experiment 28 information-set policy sampling
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1910,6 +1911,47 @@ limit. This is an offline fitting study and should be much cheaper than a new
 
 See the
 [complete Experiment 27 protocol](experiments/leduc_poker/average_policy_redistillation/README.md).
+
+## Experiment 28: information-set-stratified policy distillation
+
+Experiment 28 follows the cross-entropy result from Experiment 27 and tests
+whether rare information sets are under-trained by ordinary reservoir-row
+minibatches. It reuses the same frozen Experiment 25 averaged-target states and
+compares empirical-mass, square-root-frequency and uniform information-set
+sampling. All arms use identical soft-target cross-entropy fitting and exact
+importance correction, so they optimize the same empirical objective. Three
+optimizer replicates are nested within each of the three source trajectories;
+the source trajectory remains the inferential unit.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_information_set_stratified_distillation.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and Experiment 25 archive:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP25_RUN_ID="exp25-fact-20260906-003836"
+export RUN_ID="exp28-strat-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=3
+
+./gcp/run_information_set_stratified_distillation.sh run
+```
+
+The remote controller owns smoke, production and aggregation, so the laptop
+may be disconnected after submission. Three on-demand `n2-standard-8` workers
+run in parallel; each downloads only its own two Experiment 25 source states
+and has a 12-hour hard limit. Every fitted policy is saved, checksum recorded
+and reload-validated before a worker can succeed.
+
+See the
+[complete Experiment 28 protocol](experiments/leduc_poker/information_set_stratified_distillation/README.md).
 
 ## Add an architecture experiment
 

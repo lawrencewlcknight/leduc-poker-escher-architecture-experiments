@@ -96,6 +96,12 @@ exclude = [
 "experiments.leduc_poker.ucv_three_arm_15m_simplification" = [
   "README.md",
 ]
+"experiments.leduc_poker.average_policy_redistillation" = [
+  "README.md",
+]
+"experiments.leduc_poker.information_set_stratified_distillation" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100
