@@ -139,6 +139,8 @@ def build_training_state(
     repository_commit: str,
     config: Mapping[str, Any],
     captured_snapshots: Sequence[Mapping[str, Any]],
+    state_type: str = STATE_TYPE,
+    experiment_name: str = "ucv_residual_target_factorial",
 ) -> dict[str, Any]:
     calibration = solver.calibration_trainer
     rng_state = solver._checkpoint_resume_rng_state
@@ -146,8 +148,8 @@ def build_training_state(
         rng_state = solver._capture_rng_state()
     return {
         "schema_version": SCHEMA_VERSION,
-        "type": STATE_TYPE,
-        "experiment_name": "ucv_residual_target_factorial",
+        "type": str(state_type),
+        "experiment_name": str(experiment_name),
         "variant_id": str(variant_id),
         "seed": int(seed),
         "checkpoint_id": str(checkpoint_id),
@@ -258,9 +260,10 @@ def restore_training_state(
     seed: int,
     repository_commit: str,
     config: Mapping[str, Any],
+    expected_state_type: str = STATE_TYPE,
 ) -> list[dict]:
-    if payload.get("type") != STATE_TYPE or int(payload.get("schema_version", -1)) != SCHEMA_VERSION:
-        raise ValueError("Unsupported Experiment 25 training-state schema")
+    if payload.get("type") != expected_state_type or int(payload.get("schema_version", -1)) != SCHEMA_VERSION:
+        raise ValueError("Unsupported full-training-state schema")
     if payload.get("variant_id") != variant_id or int(payload.get("seed", -1)) != int(seed):
         raise ValueError("Training state belongs to a different task")
     if payload.get("repository_commit") != repository_commit:

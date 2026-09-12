@@ -64,6 +64,7 @@ experiments/leduc_poker/
   ucv_advantage_replay_36h/                 Experiment 26 direct-advantage replay
   average_policy_redistillation/            Experiment 27 offline average-policy distillation
   information_set_stratified_distillation/  Experiment 28 information-set policy sampling
+  promoted_ucv_cross_entropy_36h/            Experiment 29 promoted UCV 36-hour comparison
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -1952,6 +1953,56 @@ and reload-validated before a worker can succeed.
 
 See the
 [complete Experiment 28 protocol](experiments/leduc_poker/information_set_stratified_distillation/README.md).
+
+## Experiment 29: promoted UCV cross-entropy candidate at 36 hours
+
+Experiment 29 trains the complete revised candidate selected by Experiments
+23, 25, 27 and 28. It combines fixed `beta=1`, two cross-fitted critics, no
+instantaneous predictor, residual-adaptive full-support sampling, the original
+3x64 cumulative-regret MLP, a four-fit temporally averaged critic target, and
+reset average-policy fits using iteration-weighted soft-target cross-entropy.
+Ordinary empirical-reservoir minibatching is retained.
+
+Five `n2-standard-8` workers use the same seeds as Experiments 21 and 24 and
+train for 36 active hours. Policies are saved every two hours and at 15 million
+nodes; full resumable states are saved at 24 and 36 hours. Aggregation imports,
+rather than retrains, Deep CFR and Original UCV from Experiment 21 and
+Simplified UCV from Experiment 24. It creates four-algorithm trajectories by
+time and nodes, stability summaries, exact head-to-head tables, and a central
+exact-average versus neural-policy distillation diagnostic.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_promoted_ucv_cross_entropy_36h.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and frozen reference archives:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export DEEP_CFR_REPO_REF="a7459be458650a1fe02db72f8456c97c9eefdc25"
+export EXP21_RUN_ID="exp21-36h-20260830-141641"
+export EXP24_RUN_ID="exp24-selected-20260905-222025"
+export RUN_ID="exp29-ce-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_promoted_ucv_cross_entropy_36h.sh run
+```
+
+The remote controller owns smoke, production and aggregation, so the laptop
+may be disconnected after submission. Full parallelism requires 40 regional
+N2 vCPUs. Budget approximately 190--205 N2 VM-hours and allow 38--42 elapsed
+hours plus provisioning. Workers use on-demand instances, a 54-hour hard cap,
+no automatic retry, and durable 24-hour continuation states.
+
+The joined comparison is explicitly post-selection paired development
+evidence, not a new held-out confirmation. See the
+[complete Experiment 29 protocol](experiments/leduc_poker/promoted_ucv_cross_entropy_36h/README.md).
 
 ## Add an architecture experiment
 
