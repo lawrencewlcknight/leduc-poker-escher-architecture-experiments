@@ -2004,6 +2004,46 @@ The joined comparison is explicitly post-selection paired development
 evidence, not a new held-out confirmation. See the
 [complete Experiment 29 protocol](experiments/leduc_poker/promoted_ucv_cross_entropy_36h/README.md).
 
+## Experiment 30: causal rare-state audit
+
+Experiment 30 is a frozen post-training audit of the promoted Experiment 29
+candidate. It reuses the five 24- and 36-hour continuation states and retrains
+nothing. At every Leduc information set, it replaces only the deployed neural
+average-policy row with its exact reach- and iteration-weighted tabular target
+and recomputes exact exploitability. It also constructs cumulative repair
+curves ordered by rarity, policy error, measured repair effect, a combined
+rarity/error/consequence score, and 20 random rankings.
+
+The audit tests whether rare states causally account for a disproportionate
+share of the deployed-policy distillation gap. The intervention effect is
+exact; associations between rarity and approximation error remain descriptive.
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_causal_rare_state_audit.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and identify the completed
+Experiment 29 archive:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="your-completed-experiment-29-run-id"
+export RUN_ID="exp30-audit-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_causal_rare_state_audit.sh run
+```
+
+The remote controller owns smoke, audit and aggregation, so the laptop may be
+disconnected after submission. Five on-demand `n2-standard-4` tasks each
+download their own two source states; no training compute is repeated. See the
+[complete Experiment 30 protocol](experiments/leduc_poker/causal_rare_state_audit/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:

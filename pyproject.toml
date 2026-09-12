@@ -102,6 +102,9 @@ exclude = [
 "experiments.leduc_poker.information_set_stratified_distillation" = [
   "README.md",
 ]
+"experiments.leduc_poker.causal_rare_state_audit" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100
