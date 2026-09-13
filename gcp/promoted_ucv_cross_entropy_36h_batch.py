@@ -124,14 +124,24 @@ gcloud storage rsync --recursive "$OUTPUT_ROOT" "$BUCKET_ROOT/$RUN_ID/smoke"
     elif args.kind == "train":
         action = f"""
 TASK_INDEX="${{BATCH_TASK_INDEX:?Google Batch did not set BATCH_TASK_INDEX}}"
-TASK_NAME="$(python - "$TASK_INDEX" <<'PY'
+TASK_METADATA="$(python - "$TASK_INDEX" <<'PY' | tail -n 1
 import sys
-from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.config import PRODUCTION_SEEDS, task_schedule
+from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.config import (
+    PRODUCTION_SEEDS,
+    task_schedule,
+)
 index = int(sys.argv[1])
 candidate, seed = task_schedule(PRODUCTION_SEEDS)[index]
-print(f"task_{{index:03d}}_{{candidate}}_seed_{{seed}}")
+print(seed, f"task_{{index:03d}}_{{candidate}}_seed_{{seed}}")
 PY
 )"
+read -r SOURCE_SEED TASK_NAME <<< "$TASK_METADATA"
+EXPECTED_TASK_NAME="task_$(printf '%03d' "$TASK_INDEX")_"
+EXPECTED_TASK_NAME+="promoted_ucv_cross_entropy_seed_$SOURCE_SEED"
+if [[ ! "$SOURCE_SEED" =~ ^[0-9]+$ || "$TASK_NAME" != "$EXPECTED_TASK_NAME" ]]; then
+  echo "Invalid Experiment 29 task metadata: $TASK_METADATA" >&2
+  exit 2
+fi
 REMOTE_TASK="$BUCKET_ROOT/$RUN_ID/workers/$TASK_NAME"
 export EXP29_REMOTE_TASK_URI="$REMOTE_TASK"
 mkdir -p "$OUTPUT_ROOT/workers"

@@ -126,7 +126,26 @@ def test_batch_has_five_on_demand_workers_and_hard_ceiling():
     assert "promoted_ucv_cross_entropy_36h.run worker" in script
     assert "EXP29_REMOTE_TASK_URI" in script
     assert "training_states" in script
+    assert "<<'PY' | tail -n 1" in script
+    assert "Invalid Experiment 29 task metadata" in script
+    assert "EXPECTED_TASK_NAME" in script
     assert "$HOME" not in script
+
+
+def test_task_metadata_filter_discards_optional_import_stdout():
+    observed = subprocess.check_output(
+        [
+            "bash",
+            "-c",
+            "printf '%s\\n' 'Optional module warning' "
+            "'104729 task_000_promoted_ucv_cross_entropy_seed_104729' "
+            "| tail -n 1",
+        ],
+        text=True,
+    ).strip()
+    assert observed == (
+        "104729 task_000_promoted_ucv_cross_entropy_seed_104729"
+    )
 
 
 def test_smoke_aggregate_and_controller_include_both_references():

@@ -150,6 +150,9 @@ def test_cloud_job_downloads_only_two_source_states_per_worker():
     assert "for CHECKPOINT in time_24h time_36h" in script
     assert "promoted_ucv_cross_entropy_seed_" in script
     assert "causal_rare_state_audit.run worker" in script
+    assert "<<'PY' | tail -n 1" in script
+    assert "Invalid Experiment 30 source metadata" in script
+    assert "EXPECTED_SOURCE_TASK" in script
     assert "$HOME" not in script
 
 

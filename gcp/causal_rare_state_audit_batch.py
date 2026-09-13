@@ -105,8 +105,7 @@ gcloud storage rsync --recursive "$OUTPUT_ROOT" "$BUCKET_ROOT/$RUN_ID/smoke"
     elif args.kind == "train":
         action = f"""
 TASK_INDEX="${{BATCH_TASK_INDEX:?Google Batch did not set BATCH_TASK_INDEX}}"
-read -r SOURCE_SEED SOURCE_TASK <<EOF
-$(python - "$TASK_INDEX" <<'PY'
+TASK_METADATA="$(python - "$TASK_INDEX" <<'PY' | tail -n 1
 import sys
 from experiments.leduc_poker.causal_rare_state_audit.config import PRODUCTION_SEEDS
 from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.config import CANDIDATE_ID
@@ -114,8 +113,14 @@ index = int(sys.argv[1])
 seed = PRODUCTION_SEEDS[index]
 print(seed, f"task_{{index:03d}}_{{CANDIDATE_ID}}_seed_{{seed}}")
 PY
-)
-EOF
+)"
+read -r SOURCE_SEED SOURCE_TASK <<< "$TASK_METADATA"
+EXPECTED_SOURCE_TASK="task_$(printf '%03d' "$TASK_INDEX")_"
+EXPECTED_SOURCE_TASK+="promoted_ucv_cross_entropy_seed_$SOURCE_SEED"
+if [[ ! "$SOURCE_SEED" =~ ^[0-9]+$ || "$SOURCE_TASK" != "$EXPECTED_SOURCE_TASK" ]]; then
+  echo "Invalid Experiment 30 source metadata: $TASK_METADATA" >&2
+  exit 2
+fi
 TASK_NAME="task_$(printf '%03d' "$TASK_INDEX")_rare_state_audit_seed_$SOURCE_SEED"
 REMOTE_TASK="$BUCKET_ROOT/$RUN_ID/workers/$TASK_NAME"
 SOURCE_WORKER="$SOURCE_ROOT/workers/$SOURCE_TASK"
