@@ -105,6 +105,12 @@ exclude = [
 "experiments.leduc_poker.causal_rare_state_audit" = [
   "README.md",
 ]
+"experiments.leduc_poker.tabular_cfr_live_resolving" = [
+  "README.md",
+]
+"experiments.leduc_poker.ucv_live_resolving" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100

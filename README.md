@@ -2044,6 +2044,79 @@ disconnected after submission. Five on-demand `n2-standard-4` tasks each
 download their own two source states; no training compute is repeated. See the
 [complete Experiment 30 protocol](experiments/leduc_poker/causal_rare_state_audit/README.md).
 
+## Experiment 31: tabular CFR+ live resolving
+
+Experiment 31 freezes the five 36-hour promoted UCV-ESCHER policies from
+Experiment 29 and tests forward search at the start of Leduc's second betting
+round. Each solve retains all compatible private deals, weights them by
+blueprint reach, and runs full-tree tabular CFR+ to terminal at nine search
+budgets. Exact whole-game exploitability, head-to-head value against the
+blueprint, nodes, decision latency and playable resolved policies are saved.
+
+Run the mandatory smoke test:
+
+```bash
+./gcp/run_tabular_cfr_live_resolving.sh smoke-local
+```
+
+Then reuse the existing cloud configuration:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="your-completed-experiment-29-run-id"
+export RUN_ID="exp31-resolve-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_tabular_cfr_live_resolving.sh run
+```
+
+Five `n2-standard-4` tasks run in parallel and the cloud controller completes
+all stages without the laptop. The resolver is public-range-conditioned, but
+does not contain a theoretically safe opt-out gadget; exact exploitability is
+therefore the required non-degradation check. See the
+[complete Experiment 31 protocol](experiments/leduc_poker/tabular_cfr_live_resolving/README.md).
+
+## Experiment 32: UCV-sampled live resolving
+
+Experiment 32 replaces full-tree local traversal with sampled traversal and
+tests the UCV contribution causally. It compares a baseline-free
+external-sampling resolver with an otherwise matched resolver using predictable
+pre-update tabular action-value control variates. Eight paired resolver seeds
+are nested within each of the same five Experiment 29 blueprint seeds.
+Experiment 31 is imported for combined compute--quality and latency--quality
+charts rather than rerun.
+
+Run the mandatory smoke test:
+
+```bash
+./gcp/run_ucv_live_resolving.sh smoke-local
+```
+
+After Experiment 31 succeeds, run:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="your-completed-experiment-29-run-id"
+export EXP31_RUN_ID="your-completed-experiment-31-run-id"
+export RUN_ID="exp32-resolve-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_ucv_live_resolving.sh run
+```
+
+Five `n2-standard-4` tasks run in parallel under a remote controller. The five
+blueprint seeds remain the inferential units; the 40 local resolver runs are
+not treated as independent training seeds. See the
+[complete Experiment 32 protocol](experiments/leduc_poker/ucv_live_resolving/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
