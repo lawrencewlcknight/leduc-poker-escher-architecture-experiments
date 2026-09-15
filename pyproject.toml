@@ -111,6 +111,9 @@ exclude = [
 "experiments.leduc_poker.ucv_live_resolving" = [
   "README.md",
 ]
+"experiments.leduc_poker.consequence_weighted_distillation" = [
+  "README.md",
+]
 
 [tool.ruff]
 line-length = 100

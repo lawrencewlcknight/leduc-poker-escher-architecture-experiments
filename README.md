@@ -2117,6 +2117,53 @@ blueprint seeds remain the inferential units; the 40 local resolver runs are
 not treated as independent training seeds. See the
 [complete Experiment 32 protocol](experiments/leduc_poker/ucv_live_resolving/README.md).
 
+## Experiment 33: consequence-proxy selection and weighted distillation
+
+Experiment 33 asks whether strategically concentrated average-policy error can
+be reduced using a scalable consequence signal. It reuses the five frozen
+Experiment 29 trajectories at 24 and 36 hours and Experiment 30's exact
+single-information-set repair labels; it reruns no UCV regret learning. Proxy
+selection is restricted to 24-hour sources and written as an immutable artifact
+before redistillation begins. The 36-hour endpoint is the temporally held-out
+primary evaluation.
+
+The six arms separate optimisation from objective changes: standard
+soft-target cross-entropy, importance-corrected proxy-prioritised sampling,
+consequence weighting, policy-error by consequence weighting, targeted
+fine-tuning with ordinary-data rehearsal, and an explicitly non-scalable exact
+repair-gain upper bound. Three optimiser replicates are nested within each of
+the five source trajectories.
+
+Run the mandatory local smoke first:
+
+```bash
+./gcp/run_consequence_weighted_distillation.sh smoke-local
+```
+
+Then reuse the existing cloud configuration and identify both completed source
+runs:
+
+```bash
+export PROJECT_ID="your-project-id"
+export REGION="europe-west1"
+export BUCKET="gs://your-escher-results-bucket"
+export SA_EMAIL="batch-runner@your-project-id.iam.gserviceaccount.com"
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="your-completed-experiment-29-run-id"
+export EXP30_RUN_ID="your-completed-experiment-30-run-id"
+export RUN_ID="exp33-cwd-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_consequence_weighted_distillation.sh run
+```
+
+The cloud controller owns smoke, proxy calculation, selection, redistillation
+and aggregation, so the laptop may be disconnected after submission. Five
+on-demand `n2-standard-8` workers run in parallel in each array stage. Allow
+approximately 1.5--2.5 elapsed hours and budget approximately 7--12 N2
+VM-hours. See the
+[complete Experiment 33 protocol](experiments/leduc_poker/consequence_weighted_distillation/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
