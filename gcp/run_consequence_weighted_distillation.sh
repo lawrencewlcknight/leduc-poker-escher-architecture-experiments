@@ -38,8 +38,16 @@ PARALLELISM="${PARALLELISM:-5}"
 if [[ "$BUCKET" == gs://* ]]; then BUCKET_ROOT="${BUCKET%/}"; else BUCKET_ROOT="gs://${BUCKET%/}"; fi
 
 if [[ "$ACTION" == "run" || "$ACTION" == "resume" ]]; then
-  gcloud storage ls "$BUCKET_ROOT/$EXP29_RUN_ID/analysis/aggregate_manifest.json" >/dev/null
-  gcloud storage ls "$BUCKET_ROOT/$EXP30_RUN_ID/analysis/aggregate_manifest.json" >/dev/null
+  if ! gcloud storage ls \
+    "$BUCKET_ROOT/$EXP29_RUN_ID/analysis/aggregate_manifest.json" >/dev/null 2>&1; then
+    echo "Completed Experiment 29 aggregate not found: $BUCKET_ROOT/$EXP29_RUN_ID" >&2
+    exit 2
+  fi
+  if ! gcloud storage ls \
+    "$BUCKET_ROOT/$EXP30_RUN_ID/analysis/aggregate_summary.json" >/dev/null 2>&1; then
+    echo "Completed Experiment 30 aggregate not found: $BUCKET_ROOT/$EXP30_RUN_ID" >&2
+    exit 2
+  fi
 fi
 
 SMOKE_JOB="${RUN_ID}-smoke"
