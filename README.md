@@ -2164,6 +2164,53 @@ approximately 1.5--2.5 elapsed hours and budget approximately 7--12 N2
 VM-hours. See the
 [complete Experiment 33 protocol](experiments/leduc_poker/consequence_weighted_distillation/README.md).
 
+## Experiment 34: Rao--Blackwellised, structure-aware policy distillation
+
+Experiment 34 tests whether the remaining average-policy approximation gap is
+caused by repeated-target noise, insufficient capacity, or interference across
+player and betting-round subproblems. It reuses the frozen Experiment 29
+24-hour and 36-hour training states; it does not rerun UCV training.
+
+The six-arm design crosses individual replay rows versus exactly aggregated
+information-set targets with the current shared `3 x 64` network, a
+parameter-matched shared `3 x 136` network, and four hard-routed player-by-round
+experts. The 24-hour states are used for development selection and all choices
+are frozen before the 36-hour validation. Exact-tabular-teacher fits are
+diagnostic only.
+
+Run the complete local smoke test first:
+
+```bash
+./gcp/run_rao_blackwellised_policy_distillation.sh smoke-local
+```
+
+Then, using the same `PROJECT_ID`, `REGION`, `BUCKET`, and `SA_EMAIL` already
+configured for Experiments 29--33:
+
+```bash
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export RUN_ID="exp34-rb-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_rao_blackwellised_policy_distillation.sh smoke-cloud
+./gcp/run_rao_blackwellised_policy_distillation.sh run
+```
+
+The `run` command submits a cloud-owned controller, so the laptop may be
+disconnected afterwards. Check progress or resume a failed stage with:
+
+```bash
+./gcp/run_rao_blackwellised_policy_distillation.sh status
+./gcp/run_rao_blackwellised_policy_distillation.sh resume
+```
+
+With five-way parallelism, allow approximately 3--5 elapsed hours and budget
+approximately 12--20 `n2-standard-8` VM-hours, plus short jobs on smaller VMs.
+
+See the
+[complete Experiment 34 protocol](experiments/leduc_poker/rao_blackwellised_policy_distillation/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
