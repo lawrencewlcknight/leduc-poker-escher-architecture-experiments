@@ -121,6 +121,17 @@ def test_cloud_builder_and_launchers_are_syntactically_valid(tmp_path):
         script = payload["taskGroups"][0]["taskSpec"]["runnables"][0]["script"]["text"]
         assert "time_36h.pkl" in script
 
+        controller_output = tmp_path / f"exp{experiment_id}-controller.json"
+        controller_command = command.copy()
+        controller_command[controller_command.index("train")] = "controller"
+        controller_command[controller_command.index(str(output))] = str(controller_output)
+        subprocess.run(controller_command, cwd=REPOSITORY, check=True)
+        controller = json.loads(controller_output.read_text(encoding="utf-8"))
+        controller_disk = controller["allocationPolicy"]["instances"][0]["policy"][
+            "bootDisk"
+        ]["sizeGb"]
+        assert int(controller_disk) >= 40
+
     for launcher in (
         "run_live_resolving_experiment.sh",
         "run_tabular_cfr_live_resolving.sh",
@@ -137,3 +148,28 @@ def test_root_readme_documents_both_experiments():
     assert "./gcp/run_tabular_cfr_live_resolving.sh smoke-local" in text
     assert "Experiment 32: UCV-sampled live resolving" in text
     assert "./gcp/run_ucv_live_resolving.sh run" in text
+
+
+def test_live_launcher_rejects_experiment_29_placeholder():
+    environment = {
+        "PATH": "/usr/bin:/bin",
+        "PROJECT_ID": "test",
+        "REGION": "europe-west1",
+        "BUCKET": "gs://test",
+        "SA_EMAIL": "test@example.invalid",
+        "REPO_REF": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=REPOSITORY, text=True
+        ).strip(),
+        "EXP29_RUN_ID": "YOUR_COMPLETED_EXPERIMENT_29_RUN_ID",
+        "RUN_ID": "exp31-placeholder-test",
+    }
+    completed = subprocess.run(
+        ["bash", "gcp/run_live_resolving_experiment.sh", "31", "dry-run"],
+        cwd=REPOSITORY,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 2
+    assert "still a placeholder" in completed.stderr

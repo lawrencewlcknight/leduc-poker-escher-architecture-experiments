@@ -186,7 +186,7 @@ def build_job(args) -> dict:
             1000,
             1500,
             "e2-small",
-            30,
+            40,
         )
     else:
         max_duration, cpu, memory, machine, disk = (

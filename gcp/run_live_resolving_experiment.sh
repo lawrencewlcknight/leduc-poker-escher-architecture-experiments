@@ -22,6 +22,20 @@ fi
 : "${SA_EMAIL:?Set SA_EMAIL}"
 : "${REPO_REF:?Set REPO_REF to the pushed commit SHA}"
 : "${EXP29_RUN_ID:?Set EXP29_RUN_ID to the completed Experiment 29 run ID}"
+case "$EXP29_RUN_ID" in
+  YOUR_*|your-*|*your-completed*|*YOUR_COMPLETED*)
+    echo "EXP29_RUN_ID is still a placeholder; set it to the completed run ID" >&2
+    exit 2
+    ;;
+esac
+if ! git -C "$REPO_DIR" cat-file -e "${REPO_REF}^{commit}" 2>/dev/null; then
+  echo "REPO_REF is not a commit in this local checkout: $REPO_REF" >&2
+  exit 2
+fi
+if ! git -C "$REPO_DIR" cat-file -e "${REPO_REF}:gcp/live_resolving_batch.py" 2>/dev/null; then
+  echo "REPO_REF predates Experiments 31 and 32: $REPO_REF" >&2
+  exit 2
+fi
 if [[ "$EXPERIMENT_ID" == "32" ]]; then
   : "${EXP31_RUN_ID:?Set EXP31_RUN_ID to the completed Experiment 31 run ID}"
 else
@@ -35,6 +49,19 @@ if [[ ${#RUN_ID} -gt 30 || ! "$RUN_ID" =~ ^[a-z][a-z0-9-]*[a-z0-9]$ ]]; then
 fi
 PARALLELISM="${PARALLELISM:-5}"
 if [[ "$BUCKET" == gs://* ]]; then BUCKET_ROOT="${BUCKET%/}"; else BUCKET_ROOT="gs://${BUCKET%/}"; fi
+
+if [[ "$ACTION" == "run" || "$ACTION" == "resume" ]]; then
+  if ! gcloud storage ls \
+    "$BUCKET_ROOT/$EXP29_RUN_ID/analysis/aggregate_manifest.json" >/dev/null 2>&1; then
+    echo "Completed Experiment 29 aggregate not found under $BUCKET_ROOT/$EXP29_RUN_ID" >&2
+    exit 2
+  fi
+  if [[ "$EXPERIMENT_ID" == "32" ]] && ! gcloud storage ls \
+    "$BUCKET_ROOT/$EXP31_RUN_ID/analysis/aggregate_manifest.json" >/dev/null 2>&1; then
+    echo "Experiment 32 requires a completed Experiment 31 aggregate: $EXP31_RUN_ID" >&2
+    exit 2
+  fi
+fi
 
 SMOKE_JOB="${RUN_ID}-smoke"
 TRAIN_JOB="${RUN_ID}-search"

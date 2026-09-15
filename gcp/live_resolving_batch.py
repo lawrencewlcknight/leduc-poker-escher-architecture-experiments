@@ -164,7 +164,7 @@ def build_job(args) -> dict:
         max_duration = "10800s" if args.experiment_id == 31 else "21600s"
         cpu, memory, machine, disk = 4000, 15000, "n2-standard-4", 30
     elif args.kind == "controller":
-        max_duration, cpu, memory, machine, disk = "43200s", 1000, 1500, "e2-small", 20
+        max_duration, cpu, memory, machine, disk = "43200s", 1000, 1500, "e2-small", 40
     else:
         max_duration, cpu, memory, machine, disk = "7200s", 4000, 15000, "n2-standard-4", 30
     return {

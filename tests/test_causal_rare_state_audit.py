@@ -169,6 +169,10 @@ def test_remote_controller_runs_smoke_before_audit():
     ]["script"]["text"]
     assert "EXP30_REMOTE_CONTROLLER=1" in controller_script
     assert 'run_causal_rare_state_audit.sh "$CONTROLLER_ACTION"' in controller_script
+    controller_disk = controller["allocationPolicy"]["instances"][0]["policy"][
+        "bootDisk"
+    ]["sizeGb"]
+    assert int(controller_disk) >= 40
 
 
 def test_local_run_returns_after_controller_submission(tmp_path):
@@ -186,7 +190,9 @@ def test_local_run_returns_after_controller_submission(tmp_path):
         "REGION": "europe-west1",
         "BUCKET": "gs://example/results",
         "SA_EMAIL": "batch@example.iam.gserviceaccount.com",
-        "REPO_REF": "a" * 40,
+        "REPO_REF": subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=REPOSITORY, text=True
+        ).strip(),
         "EXP29_RUN_ID": "exp29-source",
         "RUN_ID": "exp30-test-run",
     }
@@ -200,8 +206,9 @@ def test_local_run_returns_after_controller_submission(tmp_path):
         timeout=15,
     )
     calls = log.read_text().splitlines()
-    assert len(calls) == 1
-    assert "batch jobs submit exp30-test-run-controller" in calls[0]
+    assert len(calls) == 2
+    assert "storage ls" in calls[0]
+    assert "batch jobs submit exp30-test-run-controller" in calls[1]
     assert "laptop may now be disconnected" in completed.stdout
 
 
