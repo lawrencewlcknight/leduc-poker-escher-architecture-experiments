@@ -2270,6 +2270,66 @@ ultimately reported as failed.
 See the
 [complete Experiment 35 protocol](experiments/leduc_poker/grouped_wide_policy_confirmation/README.md).
 
+## Experiment 36: best-response-guided supervised repair
+
+Experiment 36 starts from each frozen 36-hour Experiment 29 policy and
+fine-tunes only its average-policy network. Exact opponent best responses
+identify the information sets reached when exploiting the network; supervised
+cross-entropy towards the empirical reservoir policy is then upweighted at
+those states. Three development arms use best-response weights 1, 10 and 100.
+
+```bash
+./gcp/run_best_response_guided_repair.sh smoke-local
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export RUN_ID="exp36-brrepair-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+./gcp/run_best_response_guided_repair.sh run
+```
+
+## Experiment 37: KL-constrained exploitability descent
+
+Experiment 37 alternates policy-gradient improvement against exact current best
+responses while penalising KL movement from the Experiment 29 blueprint. It
+compares KL coefficients 0.01, 0.1 and 1.0. Exact Leduc responses isolate the
+objective and make this development evidence rather than a scalable final
+algorithm.
+
+```bash
+./gcp/run_kl_exploitability_descent.sh smoke-local
+export RUN_ID="exp37-kled-$(date -u '+%Y%m%d-%H%M%S')"
+./gcp/run_kl_exploitability_descent.sh run
+```
+
+## Experiment 38: NeuRD fine-tuning
+
+Experiment 38 applies exact counterfactual advantages directly to the policy
+logits using the NeuRD/Hedge update, comparing learning rates 0.0001, 0.0003
+and 0.001.
+
+```bash
+./gcp/run_neurd_fine_tuning.sh smoke-local
+export RUN_ID="exp38-neurd-$(date -u '+%Y%m%d-%H%M%S')"
+./gcp/run_neurd_fine_tuning.sh run
+```
+
+## Experiment 39: vanilla PPO self-play
+
+Experiment 39 is the conventional-RL control. The frozen Experiment 29 network
+is fine-tuned by clipped PPO using sampled self-play returns and a learned value
+baseline, again comparing learning rates 0.0001, 0.0003 and 0.001.
+
+```bash
+./gcp/run_ppo_self_play.sh smoke-local
+export RUN_ID="exp39-ppo-$(date -u '+%Y%m%d-%H%M%S')"
+./gcp/run_ppo_self_play.sh run
+```
+
+All four experiments use the same five Experiment 29 sources, exact evaluation
+schedule and output schema. They are exploratory because exact exploitability
+is used to identify each arm's best checkpoint. See the
+[complete post-training protocol](experiments/leduc_poker/policy_post_training/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
