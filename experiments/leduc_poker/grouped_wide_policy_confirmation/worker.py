@@ -264,7 +264,9 @@ def _smoke_overrides(config: dict) -> None:
             "num_traversals": 4,
             "max_num_iterations": 8,
             "evaluation_frequency": 1,
-            "evaluate_initial_policy": False,
+            # Exercise the production-only pre-fit diagnostic path so cloud
+            # smoke catches failures before the long training array starts.
+            "evaluate_initial_policy": True,
             "early_evaluation_node_thresholds": (),
         }
     )

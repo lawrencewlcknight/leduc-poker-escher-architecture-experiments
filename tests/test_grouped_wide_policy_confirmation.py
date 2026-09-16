@@ -128,6 +128,21 @@ def test_grouped_trainer_preserves_row_wise_objective():
     assert trainer.grouped_num_information_sets == 2
 
 
+def test_grouped_empirical_policy_is_uniform_before_first_fit():
+    config = deepcopy(CANDIDATE_CONFIG)
+    confirmation_smoke_overrides(config)
+    solver = make_confirmation_solver(731, config)
+    state = solver.game.new_initial_state()
+    while state.is_chance_node():
+        state = state.child(state.chance_outcomes()[0][0])
+    probabilities = solver.ave_policy_trainer.grouped_action_probabilities(
+        state, probs_as_dict=False
+    )
+    legal = state.legal_actions()
+    assert np.allclose(probabilities[legal], 1.0 / len(legal))
+    assert np.isclose(probabilities.sum(), 1.0)
+
+
 def test_wide_policy_initialisation_does_not_shift_ucv_core_rng():
     confirmation = deepcopy(CANDIDATE_CONFIG)
     baseline = deepcopy(EXPERIMENT_29_CONFIG)
@@ -160,6 +175,8 @@ def test_cloud_contract_has_five_standard_workers_and_bounded_runtime():
     assert "EXP35_TASK_METADATA" in script
     assert "sed -n 's/^EXP35_TASK_METADATA //p'" in script
     assert "Invalid Experiment 35 task metadata" in script
+    assert 'grouped-wide-policy-confirmation-$RETRY_ATTEMPT' in script
+    assert 'venv-$RETRY_ATTEMPT' in script
     assert "$HOME" not in script
 
 

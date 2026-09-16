@@ -41,6 +41,16 @@ class GroupedSoftTargetCrossEntropyAvePolicyTrainer(
     while removing avoidable within-information-set sampling noise.
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Production trajectories evaluate the uniform initial policy before
+        # the reservoir has any rows.  Keep the empirical-policy diagnostic
+        # well-defined until the first grouped fit populates this lookup.
+        self.grouped_target_lookup = {}
+        self.grouped_num_rows = 0
+        self.grouped_num_information_sets = 0
+        self.grouped_reduction_ratio = 0.0
+
     def _grouped_training_data(self, T):
         size = min(int(self.buffer.cur_id), int(self.buffer.buffer_size))
         if size <= 0:

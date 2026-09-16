@@ -36,9 +36,11 @@ REPO_REF={_q(args.repo_ref)}
 BUCKET_ROOT={_q(args.bucket_root.rstrip('/'))}
 RUN_ID={_q(args.run_id)}
 EXP29_RUN_ID={_q(args.experiment_29_run_id)}
-WORK_ROOT=/workspace/grouped-wide-policy-confirmation
+RETRY_ATTEMPT="${{BATCH_TASK_RETRY_ATTEMPT:-0}}"
+WORK_ROOT="/workspace/grouped-wide-policy-confirmation-$RETRY_ATTEMPT"
 REPOSITORY="$WORK_ROOT/repository"
 OUTPUT_ROOT="$WORK_ROOT/output"
+VENV_ROOT="/tmp/grouped-wide-policy-confirmation-venv-$RETRY_ATTEMPT"
 
 if command -v sudo >/dev/null 2>&1; then SUDO=sudo; else SUDO=; fi
 $SUDO apt-get update
@@ -51,8 +53,8 @@ curl -LsSf https://astral.sh/uv/install.sh | \
   env UV_INSTALL_DIR="$UV_INSTALL_DIR" UV_NO_MODIFY_PATH=1 sh
 export PATH="$UV_INSTALL_DIR:$PATH"
 uv python install 3.9
-uv venv --python 3.9 --seed /tmp/grouped-wide-policy-confirmation-venv
-source /tmp/grouped-wide-policy-confirmation-venv/bin/activate
+uv venv --python 3.9 --seed "$VENV_ROOT"
+source "$VENV_ROOT/bin/activate"
 python -m pip install --upgrade pip setuptools wheel
 python -m pip install --no-cache-dir --no-build-isolation -r "$REPOSITORY/requirements.txt"
 python -m pip install --no-cache-dir --no-build-isolation -e "$REPOSITORY"
