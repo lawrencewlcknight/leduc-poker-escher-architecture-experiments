@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.config import (
-    PRODUCTION_SEEDS,
-)
-
-
 GAME_NAME = "leduc_poker"
 SOURCE_CHECKPOINT = "time_36h"
+# Keep the controller-side experiment contract importable using only the Python
+# standard library.  These are the frozen Experiment 29 production seeds; do
+# not import Experiment 29's training config here because that transitively
+# imports NumPy and PyTorch on the deliberately minimal controller VM.
+PRODUCTION_SEEDS = (104729, 130363, 155921, 181081, 205759)
 SMOKE_SEEDS = (0,)
 
 METHODS = {
@@ -123,4 +123,3 @@ __all__ = [
     "SOURCE_CHECKPOINT", "contract_manifest", "evaluation_steps",
     "method_config", "task_schedule",
 ]
-

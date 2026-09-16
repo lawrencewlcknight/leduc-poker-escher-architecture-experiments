@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import numpy as np
@@ -87,11 +89,23 @@ def _builder_args(builder, method, kind):
 
 def test_contract_assigns_four_separate_experiments_to_same_sources():
     assert [METHODS[key]["experiment_id"] for key in METHODS] == [36, 37, 38, 39]
-    assert len(PRODUCTION_SEEDS) == 5
+    assert PRODUCTION_SEEDS == (104729, 130363, 155921, 181081, 205759)
     for method in METHODS:
         assert len(method_config(method)["arms"]) == 3
         assert evaluation_steps(method)[0] == 0
         assert evaluation_steps(method)[-1] == method_config(method)["updates"]
+
+
+def test_cloud_job_builder_imports_without_scientific_site_packages():
+    """The small controller VM must build jobs before installing ML dependencies."""
+    result = subprocess.run(
+        [sys.executable, "-S", str(REPOSITORY / "gcp" / "policy_post_training_batch.py"), "--help"],
+        cwd=REPOSITORY,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_each_method_executes_smoke_updates_on_real_leduc():
@@ -153,4 +167,3 @@ def test_root_readme_orders_experiments_after_35():
         "run_ppo_self_play.sh",
     ):
         assert launcher in text
-
