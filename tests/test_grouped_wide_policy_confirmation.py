@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from copy import deepcopy
 import importlib.util
+import os
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import numpy as np
+import pytest
 import torch
 
 from experiments.leduc_poker.grouped_wide_policy_confirmation.config import (
@@ -24,6 +28,7 @@ from experiments.leduc_poker.grouped_wide_policy_confirmation.config import (
 )
 from experiments.leduc_poker.grouped_wide_policy_confirmation.worker import (
     _make_solver as make_confirmation_solver,
+    _sync_remote_resume_point,
     _smoke_overrides as confirmation_smoke_overrides,
 )
 from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.worker import (
@@ -146,14 +151,42 @@ def test_cloud_contract_has_five_standard_workers_and_bounded_runtime():
     assert group["parallelism"] == 5
     assert group["taskCountPerNode"] == 1
     assert group["taskSpec"]["maxRunDuration"] == "194400s"
-    assert group["taskSpec"]["maxRetryCount"] == 0
+    assert group["taskSpec"]["maxRetryCount"] == 1
     assert policy["machineType"] == "n2-standard-8"
     assert policy["provisioningModel"] == "STANDARD"
     script = group["taskSpec"]["runnables"][0]["script"]["text"]
     assert "grouped_wide_policy_confirmation.run worker" in script
     assert "EXP35_REMOTE_TASK_URI" in script
+    assert "EXP35_TASK_METADATA" in script
+    assert "sed -n 's/^EXP35_TASK_METADATA //p'" in script
     assert "Invalid Experiment 35 task metadata" in script
     assert "$HOME" not in script
+
+
+def test_remote_checkpoint_sync_rejects_warning_contaminated_uri(tmp_path):
+    contaminated = (
+        "gs://example/results/Optional module pokerkit_wrapper was not importable\n"
+        "task_000_grouped_wide_ucv_seed_470892"
+    )
+    with patch.dict(os.environ, {"EXP35_REMOTE_TASK_URI": contaminated}):
+        with patch("subprocess.run") as run:
+            with pytest.raises(ValueError, match="remote task URI"):
+                _sync_remote_resume_point(tmp_path)
+    run.assert_not_called()
+
+
+def test_remote_checkpoint_sync_retries_transient_upload_failure(tmp_path):
+    failed = subprocess.CompletedProcess(args=["gcloud"], returncode=1)
+    succeeded = subprocess.CompletedProcess(args=["gcloud"], returncode=0)
+    with patch.dict(
+        os.environ,
+        {"EXP35_REMOTE_TASK_URI": "gs://example/results/workers/task_000"},
+    ):
+        with patch("subprocess.run", side_effect=[failed, failed, succeeded]) as run:
+            with patch("time.sleep") as sleep:
+                _sync_remote_resume_point(tmp_path)
+    assert run.call_count == 3
+    assert sleep.call_count == 2
 
 
 def test_aggregate_avoids_large_continuation_and_diagnostic_files():

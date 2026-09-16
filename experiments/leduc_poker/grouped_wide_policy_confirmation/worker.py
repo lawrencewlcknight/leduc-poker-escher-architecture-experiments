@@ -64,6 +64,8 @@ from .config import (
 LOGGER = logging.getLogger(__name__)
 UCV_POLICY_LOADER_ID = "unbiased_control_variate_escher"
 TRAINING_STATE_TYPE = "experiment_35_full_training_state"
+REMOTE_SYNC_ATTEMPTS = 5
+REMOTE_SYNC_MAX_DELAY_SECONDS = 30.0
 DIAGNOSTIC_FIELDS = BASE_DIAGNOSTIC_FIELDS + (
     "legacy_average_policy_loss",
     "legacy_average_exploitability",
@@ -371,11 +373,33 @@ def _training_state_paths(worker_dir: Path, *, seed: int, smoke: bool) -> list[P
 
 def _sync_remote_resume_point(worker_dir: Path) -> None:
     remote = os.environ.get("EXP35_REMOTE_TASK_URI")
-    if remote:
-        subprocess.run(
-            ["gcloud", "storage", "rsync", "--recursive", str(worker_dir.resolve()), remote.rstrip("/")],
-            check=True,
-        )
+    if not remote:
+        return
+    if (
+        not remote.startswith("gs://")
+        or remote != remote.strip()
+        or any(ord(character) < 32 for character in remote)
+    ):
+        raise ValueError(f"Invalid Experiment 35 remote task URI: {remote!r}")
+    command = [
+        "gcloud", "storage", "rsync", "--recursive",
+        str(worker_dir.resolve()), remote.rstrip("/"),
+    ]
+    last_result = None
+    for attempt in range(1, REMOTE_SYNC_ATTEMPTS + 1):
+        last_result = subprocess.run(command, check=False)
+        if last_result.returncode == 0:
+            return
+        if attempt < REMOTE_SYNC_ATTEMPTS:
+            delay = min(2.0 ** (attempt - 1), REMOTE_SYNC_MAX_DELAY_SECONDS)
+            LOGGER.warning(
+                "Experiment 35 checkpoint upload attempt %s/%s failed with "
+                "exit code %s; retrying in %.1f seconds",
+                attempt, REMOTE_SYNC_ATTEMPTS, last_result.returncode, delay,
+            )
+            time.sleep(delay)
+    assert last_result is not None
+    raise subprocess.CalledProcessError(last_result.returncode, command)
 
 
 def _restore_latest(

@@ -2260,7 +2260,12 @@ may be disconnected after submission. Check or resume with:
 
 The nominal production budget is 180 N2 VM-hours. With five-way parallelism,
 allow approximately 38--45 elapsed hours including setup and checkpoint
-overhead. Each training task has a hard 54-hour runtime ceiling.
+overhead. Each training attempt has a hard 54-hour runtime ceiling. The task
+identity is filtered and validated before training, continuation-state uploads
+are retried five times, and Batch permits one automatic task retry. A retried
+task restores the durable 24-hour continuation state rather than intentionally
+starting again; `resume` provides the same recovery path if the whole array is
+ultimately reported as failed.
 
 See the
 [complete Experiment 35 protocol](experiments/leduc_poker/grouped_wide_policy_confirmation/README.md).

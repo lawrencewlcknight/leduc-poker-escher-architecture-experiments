@@ -81,8 +81,15 @@ Status and resume commands are:
 The production array uses five on-demand `n2-standard-8` VMs. The nominal
 training budget is 180 N2 VM-hours; allow roughly 38--45 elapsed hours for
 iteration granularity, setup, checkpoint persistence, and final aggregation.
-Every training task has a hard 54-hour Batch runtime ceiling and no automatic
-task retry, which bounds accidental compute consumption.
+Every training attempt has a hard 54-hour Batch runtime ceiling. Task metadata
+is filtered through an explicit marker and checked against the expected task
+name before training, preventing incidental import output from entering a GCS
+object name. The 24- and 36-hour continuation uploads make five attempts with
+bounded backoff, and Batch allows one automatic task retry. A retry normally
+restores the durable 24-hour state and completes only the remaining active
+training. In the theoretical worst case where no state reached GCS, one retry
+could repeat a task from the beginning; no task can receive more than that one
+automatic retry.
 
 ## Download analysis
 

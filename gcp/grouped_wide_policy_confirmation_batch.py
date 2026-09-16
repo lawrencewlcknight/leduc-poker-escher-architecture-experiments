@@ -106,17 +106,17 @@ gcloud storage rsync --recursive "$OUTPUT_ROOT" "$BUCKET_ROOT/$RUN_ID/smoke"
     elif args.kind == "train":
         action = f"""
 TASK_INDEX="${{BATCH_TASK_INDEX:?Google Batch did not set BATCH_TASK_INDEX}}"
-TASK_METADATA="$(python - "$TASK_INDEX" <<'PY' | tail -n 1
+TASK_METADATA="$(python - "$TASK_INDEX" <<'PY' | sed -n 's/^EXP35_TASK_METADATA //p' | tail -n 1
 import sys
 from experiments.leduc_poker.grouped_wide_policy_confirmation.config import PRODUCTION_SEEDS, task_schedule
 index = int(sys.argv[1])
 candidate, seed = task_schedule(PRODUCTION_SEEDS)[index]
-print(seed, f"task_{{index:03d}}_{{candidate}}_seed_{{seed}}")
+print("EXP35_TASK_METADATA", seed, f"task_{{index:03d}}_{{candidate}}_seed_{{seed}}")
 PY
 )"
-read -r SOURCE_SEED TASK_NAME <<< "$TASK_METADATA"
+read -r SOURCE_SEED TASK_NAME EXTRA_METADATA <<< "$TASK_METADATA"
 EXPECTED_TASK_NAME="task_$(printf '%03d' "$TASK_INDEX")_grouped_wide_ucv_seed_$SOURCE_SEED"
-if [[ ! "$SOURCE_SEED" =~ ^[0-9]+$ || "$TASK_NAME" != "$EXPECTED_TASK_NAME" ]]; then
+if [[ ! "$SOURCE_SEED" =~ ^[0-9]+$ || "$TASK_NAME" != "$EXPECTED_TASK_NAME" || -n "$EXTRA_METADATA" ]]; then
   echo "Invalid Experiment 35 task metadata: $TASK_METADATA" >&2
   exit 2
 fi
@@ -173,7 +173,10 @@ def build_job(args) -> dict:
                 "taskSpec": {
                     "runnables": [{"script": {"text": _script(args)}}],
                     "computeResource": {"cpuMilli": cpu, "memoryMib": memory},
-                    "maxRetryCount": 2 if args.kind == "controller" else 0,
+                    "maxRetryCount": (
+                        2 if args.kind == "controller"
+                        else (1 if args.kind == "train" else 0)
+                    ),
                     "maxRunDuration": max_duration,
                 },
                 "taskCount": task_count,
