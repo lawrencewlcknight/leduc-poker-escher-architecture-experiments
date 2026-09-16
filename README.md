@@ -2211,6 +2211,60 @@ approximately 12--20 `n2-standard-8` VM-hours, plus short jobs on smaller VMs.
 See the
 [complete Experiment 34 protocol](experiments/leduc_poker/rao_blackwellised_policy_distillation/README.md).
 
+## Experiment 35: fresh grouped-wide policy confirmation
+
+Experiment 35 integrates the best average-policy architecture selected in
+Experiment 34 into the complete UCV-ESCHER training loop. Five previously
+unused seeds are trained for 36 active hours on separate on-demand
+`n2-standard-8` VMs, with playable checkpoints every two hours and at 15
+million nodes.
+
+The candidate uses grouped information-set targets, a shared `3 x 136` policy
+network, soft-target cross-entropy, learning rate `0.003`, and 20,000 fitting
+updates. At every checkpoint it also refits the former row-wise `3 x 64`
+policy from the same reservoir. This supplies a paired contemporaneous control
+without a second training trajectory; its cost is excluded from active
+training time and its RNG use is isolated.
+
+The final analysis also imports all four frozen Experiment 29 series: Deep
+CFR, original UCV-ESCHER, simplified UCV, and the revised cross-entropy UCV.
+They are plotted beside the fresh candidate over time and nodes touched, but
+are reported as independent-cohort historical comparisons rather than paired
+tests because Experiment 35 deliberately retains new seed labels.
+
+Run the mandatory local smoke test first:
+
+```bash
+./gcp/run_grouped_wide_policy_confirmation.sh smoke-local
+```
+
+After pushing that exact tested commit, reuse the cloud configuration already
+used for the preceding experiments:
+
+```bash
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export RUN_ID="exp35-confirm-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+
+./gcp/run_grouped_wide_policy_confirmation.sh run
+```
+
+The cloud-owned controller runs smoke, training and aggregation, so the laptop
+may be disconnected after submission. Check or resume with:
+
+```bash
+./gcp/run_grouped_wide_policy_confirmation.sh status
+./gcp/run_grouped_wide_policy_confirmation.sh resume
+```
+
+The nominal production budget is 180 N2 VM-hours. With five-way parallelism,
+allow approximately 38--45 elapsed hours including setup and checkpoint
+overhead. Each training task has a hard 54-hour runtime ceiling.
+
+See the
+[complete Experiment 35 protocol](experiments/leduc_poker/grouped_wide_policy_confirmation/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:

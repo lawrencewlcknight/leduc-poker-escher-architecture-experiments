@@ -193,7 +193,9 @@ def save_torch_policy_snapshot(
         "checkpoint_target_nodes": int(checkpoint_target_nodes),
         "stage_label": str(stage_label),
         "policy_state_dict": state_dict,
-        "policy_network_layers": list(solver.network_layers),
+        "policy_network_layers": list(
+            getattr(solver.ave_policy_trainer, "network_layers", solver.network_layers)
+        ),
         "input_size": int(solver.infostate_size),
         "num_actions": int(solver.action_size),
     }
