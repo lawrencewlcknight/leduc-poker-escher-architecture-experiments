@@ -2330,6 +2330,36 @@ schedule and output schema. They are exploratory because exact exploitability
 is used to identify each arm's best checkpoint. See the
 [complete post-training protocol](experiments/leduc_poker/policy_post_training/README.md).
 
+## Experiment 40: approximate-exploiter-guided policy repair
+
+Experiment 40 converts Experiment 36's exact-best-response intervention into a
+sample-only candidate suitable for larger poker variants. Independently trained
+one-sided exploiters play against each frozen Experiment 29 policy. A neural
+occupancy-density classifier identifies information states reached
+disproportionately under adversarial play, and that signal weights additional
+supervised fitting towards the original empirical average-policy target.
+
+The experiment compares uniform additional repair, the exact Leduc oracle, a
+single approximate exploiter, an exploiter ensemble, and a reliability-gated
+ensemble. Two additional exploiters per seat are held out for scalable
+validation. Exact best response and exploitability are analysis-only and do not
+select checkpoints.
+
+```bash
+./gcp/run_approximate_exploiter_guided_repair.sh smoke-local
+
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export RUN_ID="exp40-aer-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+./gcp/run_approximate_exploiter_guided_repair.sh run
+```
+
+Five `n2-standard-4` workers run one source seed each. Every production task has
+a six-hour ceiling and one retry; the cloud-owned controller performs smoke,
+training and aggregation without requiring the laptop to remain connected. See
+the [complete Experiment 40 protocol](experiments/leduc_poker/approximate_exploiter_guided_repair/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
