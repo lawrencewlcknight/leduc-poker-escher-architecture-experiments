@@ -65,6 +65,7 @@ experiments/leduc_poker/
   average_policy_redistillation/            Experiment 27 offline average-policy distillation
   information_set_stratified_distillation/  Experiment 28 information-set policy sampling
   promoted_ucv_cross_entropy_36h/            Experiment 29 promoted UCV 36-hour comparison
+  average_policy_optimization_horizon/       Experiment 41 continued policy-fitting horizon
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -2359,6 +2360,35 @@ Five `n2-standard-4` workers run one source seed each. Every production task has
 a six-hour ceiling and one retry; the cloud-owned controller performs smoke,
 training and aggregation without requiring the laptop to remain connected. See
 the [complete Experiment 40 protocol](experiments/leduc_poker/approximate_exploiter_guided_repair/README.md).
+
+## Experiment 41: average-policy optimisation horizon
+
+Experiment 41 isolates Experiment 40's strongest observation: uniform
+additional supervised fitting was more effective than approximate-exploiter
+weighting. It loads each frozen Experiment 29 `time_36h` policy and replay
+reservoir, constructs one iteration-weighted soft target per observed
+information state, and continues one full-batch Adam trajectory to 2,000
+updates. The same network is evaluated every 100 updates and saved at 400, 800,
+1,200, 1,600 and 2,000 updates.
+
+The fitting path operates only on replay tensors and does not enumerate the
+game tree. Exact exploitability and tabular comparators are Leduc-only post-hoc
+diagnostics. All five fixed horizons are completed for all five Experiment 29
+seeds; no measured checkpoint controls stopping or selection.
+
+```bash
+./gcp/run_average_policy_optimization_horizon.sh smoke-local
+
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export RUN_ID="exp41-fit-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+./gcp/run_average_policy_optimization_horizon.sh run
+```
+
+Five `n2-standard-4` workers run in parallel. The remote controller performs
+smoke, fitting and aggregation without requiring the laptop to remain
+connected. See the [complete Experiment 41 protocol](experiments/leduc_poker/average_policy_optimization_horizon/README.md).
 
 ## Add an architecture experiment
 
