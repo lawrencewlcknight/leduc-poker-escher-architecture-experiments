@@ -66,6 +66,7 @@ experiments/leduc_poker/
   information_set_stratified_distillation/  Experiment 28 information-set policy sampling
   promoted_ucv_cross_entropy_36h/            Experiment 29 promoted UCV 36-hour comparison
   average_policy_optimization_horizon/       Experiment 41 continued policy-fitting horizon
+  average_policy_rowwise_continuation/       Experiment 42 scalable row-wise continuation
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -2389,6 +2390,35 @@ export PARALLELISM=5
 Five `n2-standard-4` workers run in parallel. The remote controller performs
 smoke, fitting and aggregation without requiring the laptop to remain
 connected. See the [complete Experiment 41 protocol](experiments/leduc_poker/average_policy_optimization_horizon/README.md).
+
+## Experiment 42: row-wise average-policy continuation
+
+Experiment 42 tests whether Experiment 41's policy improvement requires
+information-set grouping or can be recovered by simply continuing ordinary
+replay-row training. It reuses the five frozen Experiment 29 policies and
+reservoirs and imports Experiment 41 as an immutable reference.
+
+The primary arm processes exactly the same number of neural-network examples
+as the 1,700-update Experiment 41 policy. A sensitivity arm instead performs
+1,700 ordinary 2,048-row optimiser updates. Both use fresh Adam optimisers,
+learning rate `3e-4`, iteration-weighted soft-target cross-entropy and no
+sorting, deduplication or grouping in the training path.
+
+```bash
+./gcp/run_average_policy_rowwise_continuation.sh smoke-local
+
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export EXP41_RUN_ID="exp41-fit-20260918-180815"
+export RUN_ID="exp42-row-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+./gcp/run_average_policy_rowwise_continuation.sh run
+```
+
+Five `n2-standard-4` workers run in parallel. Exact exploitability is used only
+for Leduc analysis; fitting requires neither a game tree nor a best response.
+The remote controller owns smoke, fitting and aggregation. See the
+[complete Experiment 42 protocol](experiments/leduc_poker/average_policy_rowwise_continuation/README.md).
 
 ## Add an architecture experiment
 
