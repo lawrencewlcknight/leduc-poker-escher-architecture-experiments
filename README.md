@@ -67,6 +67,7 @@ experiments/leduc_poker/
   promoted_ucv_cross_entropy_36h/            Experiment 29 promoted UCV 36-hour comparison
   average_policy_optimization_horizon/       Experiment 41 continued policy-fitting horizon
   average_policy_rowwise_continuation/       Experiment 42 scalable row-wise continuation
+  integrated_extended_average_policy_fitting/ Experiment 43 end-to-end extended policy fitting
   escher_architecture_base.py               Baseline-copy helper
   escher_variant_config_utils.py            Derived-config validation
   escher_variant_ablation_runner.py         Multi-variant experiment runner
@@ -2419,6 +2420,37 @@ Five `n2-standard-4` workers run in parallel. Exact exploitability is used only
 for Leduc analysis; fitting requires neither a game tree nor a best response.
 The remote controller owns smoke, fitting and aggregation. See the
 [complete Experiment 42 protocol](experiments/leduc_poker/average_policy_rowwise_continuation/README.md).
+
+## Experiment 43: integrated extended average-policy fitting
+
+Experiment 43 trains five fresh 36-hour trajectories using the complete
+Experiment 29 UCV configuration and seed labels. At every saved checkpoint it
+retains the ordinary 5,000-minibatch policy fit as an internal control, clones
+that network, and applies exactly 1,700 additional grouped full-batch updates.
+The grouped refinement is warm-started, uses a fresh Adam optimiser at learning
+rate `3e-4`, and is prevented from altering the training trajectory by restoring
+all RNG state and excluding its runtime from the active-training clock.
+
+The final checkpoint additionally saves playable 400, 800, 1,200 and 1,600
+update policies for audit; 1,700 remains the sole pre-specified candidate. The
+analysis imports Deep CFR, original UCV-ESCHER, simplified UCV-ESCHER and the
+Experiment 29 revised UCV trajectories without retraining them.
+
+```bash
+./gcp/run_integrated_extended_average_policy_fitting.sh smoke-local
+
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP29_RUN_ID="exp29-ce-20260912-171556"
+export RUN_ID="exp43-fit-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+./gcp/run_integrated_extended_average_policy_fitting.sh run
+```
+
+Five on-demand `n2-standard-8` workers run in parallel. Refinement uses replay
+data only and requires neither a game tree nor a best response; exact Leduc
+exploitability is analysis-only. The cloud-owned controller performs smoke,
+training and aggregation. See the [complete Experiment 43
+protocol](experiments/leduc_poker/integrated_extended_average_policy_fitting/README.md).
 
 ## Add an architecture experiment
 
