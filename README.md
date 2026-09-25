@@ -2452,6 +2452,33 @@ exploitability is analysis-only. The cloud-owned controller performs smoke,
 training and aggregation. See the [complete Experiment 43
 protocol](experiments/leduc_poker/integrated_extended_average_policy_fitting/README.md).
 
+## Experiment 44: Single UCV-ESCHER historical policy
+
+Experiment 44 tests whether UCV-ESCHER can avoid average-policy compression
+error in the same way that SD-CFR does. The Experiment 43 regret and critic
+learner is unchanged, but its two regret networks are saved immediately before
+every outer-iteration update. At two-hour intervals, the full
+iteration-weighted historical-network mixture is compared with the incumbent
+1,700-update neural average, the ordinary neural average, the empirical policy
+reservoir, the exact tabular average, and bounded historical reservoirs of 16,
+32, 64 and 128 networks.
+
+```bash
+./gcp/run_single_ucv_escher_12h.sh smoke-local
+
+export REPO_REF="$(git rev-parse HEAD)"
+export RUN_ID="exp44-single-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=3
+./gcp/run_single_ucv_escher_12h.sh run
+```
+
+Three fresh development seeds train for 12 effective hours on separate
+on-demand `n2-standard-8` workers. The full historical mixture is independently
+checked against the exact accumulated average at every checkpoint. The remote
+controller owns smoke, training and aggregation, so the laptop may be
+disconnected after submission. See the [complete Experiment 44
+protocol](experiments/leduc_poker/single_ucv_escher_12h/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
