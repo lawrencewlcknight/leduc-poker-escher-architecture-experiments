@@ -39,6 +39,9 @@ exclude = [
 ]
 
 [tool.setuptools.package-data]
+"experiments.leduc_poker.grouped_ucv_temporal_head_to_head" = [
+  "README.md",
+]
 "experiments.leduc_poker.adaptive_residual_predictive_escher" = [
   "README.md",
   "experiment1_checkpoint_curves.csv",

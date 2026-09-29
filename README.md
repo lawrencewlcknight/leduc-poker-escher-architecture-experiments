@@ -2479,6 +2479,39 @@ controller owns smoke, training and aggregation, so the laptop may be
 disconnected after submission. See the [complete Experiment 44
 protocol](experiments/leduc_poker/single_ucv_escher_12h/README.md).
 
+## Experiment 45: best grouped UCV temporal head-to-head
+
+This evaluation-only experiment reuses the five Experiment 35 grouped-policy
+runs (the 136×136×136 reset cross-entropy fitting package). It evaluates every
+two-hour checkpoint from 2 to 36 hours against all earlier checkpoints in the
+same seed: 765 exact two-seat matchups, with training seed as the inference
+unit. It reports full-trajectory and late-window improvement, exploitability
+by time and nodes, and thesis-ready charts/tables. **No retraining or policy
+refitting is performed.** This experiment number belongs to the architecture
+repository, not the separate standard-ESCHER repository.
+
+Run from this repository root after committing and pushing the code:
+
+```bash
+# Optional local smoke: three real saved policies, not newly trained models.
+./gcp/run_grouped_ucv_temporal_head_to_head.sh smoke-local
+
+# Reuse PROJECT_ID, REGION, BUCKET and SA_EMAIL; replace old run/ref values.
+export REPO_REF="$(git rev-parse HEAD)"
+export EXP35_RUN_ID="exp35-confirm-20260916-011231"
+export RUN_ID="exp45-h2h-$(date -u '+%Y%m%d-%H%M%S')"
+./gcp/run_grouped_ucv_temporal_head_to_head.sh run
+./gcp/run_grouped_ucv_temporal_head_to_head.sh status
+```
+
+One n2-standard-4 VM performs the cloud smoke, analysis and upload without the
+laptop remaining online. Allow approximately 10–30 minutes including setup;
+the task has a four-hour timeout and no automatic retries. Only lightweight
+saved policies and manifests are downloaded, not replay reservoirs. No new
+controller/child-job permissions are needed.
+
+See the [full protocol, local commands and download instructions](experiments/leduc_poker/grouped_ucv_temporal_head_to_head/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
