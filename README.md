@@ -2512,6 +2512,41 @@ controller/child-job permissions are needed.
 
 See the [full protocol, local commands and download instructions](experiments/leduc_poker/grouped_ucv_temporal_head_to_head/README.md).
 
+## Experiment 46: current-candidate cross-algorithm policy leagues
+
+Evaluation only: replace the old UCV comparator with the five saved
+Experiment 35 grouped-wide policies, alongside the updated SD-CFR, DREAM and
+standard ESCHER candidates. Two separate exact, two-seat cross-seed leagues:
+seven algorithms near 15M nodes, and five available algorithms at 36 active
+hours. There are 60 endpoint policies and 775 matchups; **no retraining or
+policy fitting**. The old league and frozen benchmark remain unchanged.
+
+After committing and pushing, reuse the usual GCP variables from this repo:
+
+```bash
+export REPO_REF="$(git rev-parse HEAD)"
+export RUN_ID="exp46-league-$(date -u '+%Y%m%d-%H%M%S')"
+./gcp/run_current_candidate_policy_league.sh run
+./gcp/run_current_candidate_policy_league.sh status
+```
+
+One on-demand n2-standard-8 runs a built-in real-checkpoint smoke, then the full
+evaluation and upload. Laptop may disconnect after submission. Eight-hour hard
+task limit, zero automatic retries; no controller/child-job IAM requirement.
+Comparator source locations are pinned; `BUCKET` is only the output destination.
+The VM needs read access to the existing DREAM, ESCHER and Deep CFR buckets.
+
+```bash
+mkdir -p "cloud_outputs/$RUN_ID/analysis"
+gcloud storage cp -r "${BUCKET%/}/$RUN_ID/analysis/*" "cloud_outputs/$RUN_ID/analysis/"
+```
+
+The [full protocol](experiments/leduc_poker/current_candidate_policy_league/README.md)
+documents seed-cohort inference, the small historical Deep CFR node undershoot,
+deferred-fitting cost caveats, optional local smoke and all outputs. Update the
+thesis after these results arrive. This is **architecture** Experiment 46,
+not DREAM Experiment 46.
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
