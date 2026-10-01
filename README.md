@@ -2547,6 +2547,63 @@ deferred-fitting cost caveats, optional local smoke and all outputs. Update the
 thesis after these results arrive. This is **architecture** Experiment 46,
 not DREAM Experiment 46.
 
+## Experiment 47: frozen critic-target cache efficiency
+
+This paired component benchmark reuses Leduc architecture Experiment 35's final 36-hour states, seeds **470892, 385626, 145871**.
+It compares the existing critic fit, which recomputes TD targets in each
+minibatch, with an opt-in fit that computes each replay row's frozen target
+once per fitting block. It does **not** retrain the whole algorithm or change
+the average-policy configuration.
+
+Each of three separate `n2-standard-8` VMs handles one source seed. The two
+arms run sequentially on the same VM, from identical model/Adam states and
+minibatch RNG states: two critic folds, 10,000 updates per fold, batch 2,048,
+three timing repeats. Timings include cache construction. Targets, final
+parameters, optimizer states, target averaging and RNG equality are checked;
+a speedup alone is not a correctness result. Caching remains **off by default**.
+
+Run from this repository root with `PROJECT_ID`, `REGION`, `BUCKET` and
+`SA_EMAIL` set. Commit and push this implementation before cloud submission.
+Use this repo's Python environment for the optional local smoke
+(or set `PYTHON=/path/to/venv/bin/python`):
+
+```bash
+./gcp/run_frozen_critic_target_efficiency.sh smoke-local
+
+export REPO_REF="$(git rev-parse HEAD)"
+export SOURCE_RUN_ID="exp35-confirm-20260916-011231"
+export RUN_ID="exp47-cache-$(date -u '+%Y%m%d-%H%M%S')"
+./gcp/run_frozen_critic_target_efficiency.sh run
+```
+
+Always reset the source/run variables when switching between repos.
+Use the bucket containing this repository's source run; it is also the output
+destination. Three simultaneous workers require 24 available N2 vCPUs.
+The remote controller runs a mandatory real-source smoke, the three paired
+workers, and aggregation. Your laptop may disconnect after submission.
+
+```bash
+./gcp/run_frozen_critic_target_efficiency.sh status
+# Only after a failure, with the same RUN_ID, SOURCE_RUN_ID and REPO_REF:
+./gcp/run_frozen_critic_target_efficiency.sh resume
+```
+
+After aggregation, download the complete small analysis folder (not the
+multi-GB source training states):
+
+```bash
+CACHE_BUCKET="${BUCKET%/}"
+[[ "$CACHE_BUCKET" == gs://* ]] || CACHE_BUCKET="gs://$CACHE_BUCKET"
+mkdir -p "cloud_outputs/$RUN_ID/analysis"
+gcloud storage rsync --recursive \
+  "$CACHE_BUCKET/$RUN_ID/analysis" "cloud_outputs/$RUN_ID/analysis"
+```
+
+Read `analysis/summary.json`'s `all_equivalence_checks_passed` as well as its
+speedup: a successfully completed benchmark can report a failed numerical
+comparison. See the [full protocol](experiments/leduc_poker/frozen_critic_target_efficiency/README.md)
+for correctness gates, interpretation, memory and timeout limits.
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:
