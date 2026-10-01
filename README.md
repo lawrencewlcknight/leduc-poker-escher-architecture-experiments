@@ -2604,6 +2604,56 @@ speedup: a successfully completed benchmark can report a failed numerical
 comparison. See the [full protocol](experiments/leduc_poker/frozen_critic_target_efficiency/README.md)
 for correctness gates, interpretation, memory and timeout limits.
 
+## Experiment 48: 36-hour grouped UCV with cached critic targets
+
+Train Experiment 35's best grouped-policy UCV configuration from scratch on
+the **same five seeds**, enabling only Experiment 47's per-fit frozen critic
+target cache. Five separate **n2-standard-8** VMs run in parallel for 36 active
+hours each. Learning budgets and per-iteration policy fitting stay unchanged;
+this is a same-seed historical efficiency follow-up, not fresh confirmation.
+
+Save playable policies every two active hours and at the first completed
+15-million-node crossing. Keep all analytical outputs and policy checkpoints,
+**no full training states**. Interrupted training is not resumable; automatic
+training retries are disabled. Existing source runs and default cache settings
+are unchanged. The mandatory cloud smoke checks complete-iteration numerical
+equivalence before production, then the cloud controller handles everything.
+
+Run from this repository root **after committing and pushing**:
+
+```bash
+# Optional; requires this repo's Python dependencies locally:
+./gcp/run_cached_grouped_ucv_36h.sh smoke-local
+
+# Reuse PROJECT_ID, REGION and the working SA_EMAIL. Reset stale FHP variables:
+export BUCKET="gs://clever-overview-399515-leduc-poker-dream-results"
+export REPO_REF="$(git rev-parse HEAD)"
+export RUN_ID="exp48-cache36h-$(date -u '+%Y%m%d-%H%M%S')"
+export PARALLELISM=5
+./gcp/run_cached_grouped_ucv_36h.sh run
+./gcp/run_cached_grouped_ucv_36h.sh status
+```
+
+The laptop may disconnect after submission. Allow 180 active N2 VM-hours plus
+overhead, with 40 N2 vCPUs available for five concurrent workers. Each worker
+has a 54-hour wall-clock ceiling and zero automatic retries. Output includes
+exact exploitability by time/nodes, paired policy diagnostics, endpoint and
+late-window tables, component timings, and time to the original Experiment
+35 workload. Frozen historical curves, including selected uniform SD-CFR, are
+imported without retraining or downloading large archives.
+
+```bash
+# Rerun only aggregation if all training workers succeeded:
+./gcp/run_cached_grouped_ucv_36h.sh reaggregate
+
+# Download the complete small analysis folder after aggregation succeeds:
+mkdir -p "cloud_outputs/$RUN_ID/analysis"
+gcloud storage rsync --recursive \
+  "${BUCKET%/}/$RUN_ID/analysis" "cloud_outputs/$RUN_ID/analysis"
+```
+
+See the [full configuration, clock, validation, retention and comparison protocol](experiments/leduc_poker/cached_grouped_ucv_36h/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:

@@ -272,7 +272,8 @@ def _smoke_overrides(config: dict) -> None:
     )
 
 
-def _make_solver(seed: int, config: Mapping[str, Any]) -> DiagnosticGroupedWideUCVSolver:
+def _make_solver(seed: int, config: Mapping[str, Any], *,
+                 solver_class=DiagnosticGroupedWideUCVSolver) -> DiagnosticGroupedWideUCVSolver:
     control_fields = {
         "max_num_iterations",
         "preserve_evaluation_rng",
@@ -285,7 +286,7 @@ def _make_solver(seed: int, config: Mapping[str, Any]) -> DiagnosticGroupedWideU
         seed=int(seed),
         logger=Logger(verbose=False),
     )
-    solver = DiagnosticGroupedWideUCVSolver(**kwargs)
+    solver = solver_class(**kwargs)
     solver.max_num_iterations = int(config["max_num_iterations"])
     solver.preserve_evaluation_rng = bool(config["preserve_evaluation_rng"])
     solver.evaluate_initial_policy = bool(config.get("evaluate_initial_policy", False))
@@ -333,6 +334,7 @@ def _target_reached(target: Mapping, *, active_seconds: float, nodes: int) -> bo
 def _save_policy(
     *, solver, seed: int, target: Mapping, checkpoint: Mapping,
     config: Mapping, worker_dir: Path, commit: str,
+    experiment_id: int = 35, arm: str = "confirmatory",
 ) -> dict:
     checkpoint_id = str(target["checkpoint_id"])
     path = worker_dir / "snapshots" / f"{CANDIDATE_ID}_seed_{seed}_{checkpoint_id}.pkl"
@@ -342,9 +344,9 @@ def _save_policy(
         path,
         seed=int(seed),
         iteration=int(checkpoint["iteration"]),
-        arm="confirmatory",
+        arm=arm,
         config=dict(config),
-        stage_label=f"Experiment 35 {CANDIDATE_ID} {checkpoint_id}",
+        stage_label=f"Experiment {experiment_id} {CANDIDATE_ID} {checkpoint_id}",
         checkpoint_target_nodes=(
             int(target["target_nodes"])
             if target.get("target_nodes") is not None

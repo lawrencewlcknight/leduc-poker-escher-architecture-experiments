@@ -39,6 +39,10 @@ exclude = [
 ]
 
 [tool.setuptools.package-data]
+"experiments.leduc_poker.cached_grouped_ucv_36h" = [
+  "README.md",
+  "frozen_reference.json",
+]
 "experiments.leduc_poker.current_candidate_policy_league" = [
   "README.md",
 ]
