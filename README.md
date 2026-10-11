@@ -2654,6 +2654,22 @@ gcloud storage rsync --recursive \
 
 See the [full configuration, clock, validation, retention and comparison protocol](experiments/leduc_poker/cached_grouped_ucv_36h/README.md).
 
+## Experiment 49: RNaD test-time re-solving of the Experiment 35 policy
+
+This frozen-policy audit compares the unchanged grouped UCV-ESCHER blueprint,
+tabular CFR+ with an opponent opt-out gadget, and neural RNaD/NeuRD with the
+same gadget. The five Experiment 35 36-hour policies are primary; the 12-hour
+policies provide a secondary weaker-blueprint test. Decision budgets are
+0.1, 0.5, 2 and 5 seconds, with eight nested resolver repetitions. Exact
+whole-game exploitability, direct play and latency are measured without
+filtering out degraded policies. No UCV retraining or GPU is required.
+
+Run the CPU pilot first on one `n2-standard-16`; full evaluation is a separate,
+explicitly gated submission. After pushing the implementation, use
+`bash gcp/run_exp49_rnad_resolving.sh run` with `MODE=pilot` and a fresh
+`exp49-rnad-...` run ID. The source bucket is independent of the destination
+bucket. See the [complete protocol, safeguards, output definitions and launch commands](experiments/leduc_poker/rnad_ucv_resolving/README.md).
+
 ## Add an architecture experiment
 
 Start every new experiment by calling:

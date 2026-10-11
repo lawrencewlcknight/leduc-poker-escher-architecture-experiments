@@ -39,6 +39,11 @@ exclude = [
 ]
 
 [tool.setuptools.package-data]
+"experiments.leduc_poker.rnad_ucv_resolving" = [
+  "README.md",
+  "NOTICE.md",
+  "LICENSE.openspiel",
+]
 "experiments.leduc_poker.cached_grouped_ucv_36h" = [
   "README.md",
   "frozen_reference.json",
