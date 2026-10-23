@@ -2709,3 +2709,13 @@ manifest.
 for the four-arm separation of TD-target averaging and collection-control
 averaging, with three seed blocks (12 runs), a 600-iteration horizon, exact diagnostics
 and resumable cloud workers.
+
+## Experiment 51: critic update budgets with native adaptive sampling
+
+[Protocol and run instructions](experiments/leduc_poker/critic_update_budget/README.md)
+for 10,000, 2,500 and 500 critic updates plus an exact zero-Q control, using
+three paired seeds (12 runs) and 600 iterations. The Experiment 35/48 learner
+retains residual calibration, adaptive sampling, four-fit critic averaging and
+per-iteration grouped policy fitting. Includes exact estimator audits, actual
+optimizer-step accounting, full-state resume, and a mature timing pilot before
+cloud training.
