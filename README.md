@@ -2719,3 +2719,13 @@ retains residual calibration, adaptive sampling, four-fit critic averaging and
 per-iteration grouped policy fitting. Includes exact estimator audits, actual
 optimizer-step accounting, full-state resume, and a mature timing pilot before
 cloud training.
+
+## Experiment 52: oracle intervention on advantage noise
+
+[Protocol and run instructions](experiments/leduc_poker/advantage_noise_intervention/README.md)
+for paired noise amplitudes 1, 0.5 and 0 on frozen Experiment 35 Leduc checkpoints.
+Three source seeds, two checkpoints and eight paired repetitions yield 288 short
+native regret fits. Exact collection-weighted reference errors, policy fidelity,
+sensitivity groups and exploitability are evaluated separately. Includes verified
+historical sources, repetition-level restart, a production-size pilot and gated
+cloud execution. This is an oracle mechanism diagnostic, not a model-free learner.
