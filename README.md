@@ -2702,3 +2702,10 @@ python scripts/promote_thesis_artifacts.py cloud_outputs/JOB_NAME
 The selected files are copied under
 `thesis_artifacts/<experiment_name>/<run_directory_name>/` with a promotion
 manifest.
+
+## Experiment 50: critic averaging mechanism
+
+[Protocol and run instructions](experiments/leduc_poker/critic_averaging_mechanism/README.md)
+for the four-arm separation of TD-target averaging and collection-control
+averaging, with three seed blocks (12 runs), a 600-iteration horizon, exact diagnostics
+and resumable cloud workers.
