@@ -42,20 +42,39 @@ apt_retry() {{
 }}
 apt_retry update
 apt_retry install -y git curl ca-certificates python3 python3-venv python3-dev build-essential
+verify_checkout() {{
+  local directory="$1" expected="$2" actual
+  actual="$(git -C "$directory" rev-parse HEAD)"
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'Checkout revision mismatch in %s: expected %s, got %s\\n' "$directory" "$expected" "$actual" >&2
+    exit 1
+  fi
+  # Some Git versions return success from checkout despite missing blob errors.
+  # Detect incomplete tracked files now, before submitting any child jobs.
+  if ! git -C "$directory" diff --exit-code HEAD --; then
+    printf 'Incomplete or modified checkout: %s (revision %s)\\n' "$directory" "$expected" >&2
+    exit 1
+  fi
+}}
 git clone --filter=blob:none {shlex.quote(repo)} "$REPOSITORY"
 git -C "$REPOSITORY" checkout --detach {shlex.quote(checkout)}
+verify_checkout "$REPOSITORY" {shlex.quote(checkout)}
 printf 'Checked out source: %s\\n' "$(git -C "$REPOSITORY" rev-parse HEAD)"
 cd "$REPOSITORY"
 '''
     if controller:
         text += 'export STUDY_REPOSITORY="$REPOSITORY"\n'
         if launcher_ref != repo_ref:
-            # Read the *original* source when validating a resumed worker's
-            # smoke receipt. Do not relax or rewrite any scientific manifest.
+            # A shared clone of the partial launcher clone cannot fetch missing
+            # historical blobs: it does not inherit the upstream promisor remote.
+            # Give the scientific checkout its own remote and lazy-fetch support.
+            # Do not relax or rewrite any scientific fingerprint/manifest.
             text += f'''
-git clone --shared "$REPOSITORY" "$WORK/study"
+git clone --filter=blob:none --no-checkout {shlex.quote(repo)} "$WORK/study"
 git -C "$WORK/study" checkout --detach {shlex.quote(repo_ref)}
+verify_checkout "$WORK/study" {shlex.quote(repo_ref)}
 export STUDY_REPOSITORY="$WORK/study"
+printf 'Verified scientific checkout: %s (%s)\\n' "$STUDY_REPOSITORY" {shlex.quote(repo_ref)}
 '''
     return text
 

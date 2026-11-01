@@ -74,7 +74,12 @@ import json,os,sys
 from experiments.cloud_source_identity import source_identity
 s=json.load(open(sys.argv[1]))
 assert s['status']=='complete', 'Cloud smoke did not complete'
-assert s['source']==source_identity('tests/test_critic_averaging_mechanism.py', os.environ.get('STUDY_REPOSITORY')), 'Smoke code differs from confirmation code'
+study = os.environ.get('STUDY_REPOSITORY')
+expected = source_identity('tests/test_critic_averaging_mechanism.py', study)
+if s.get('source') != expected:
+    raise SystemExit(f"Smoke code differs from confirmation code: receipt={s.get('source')}, "
+                     f"expected={expected}, repo_ref={os.environ['REPO_REF']}, checkout={study}")
+print(f"Verified smoke source fingerprint: {expected} (revision {os.environ['REPO_REF']})")
 PYGATE
     ensure "$RUN_ID-train-$ATTEMPT" train
     ensure "$RUN_ID-aggregate-$ATTEMPT" aggregate ;;

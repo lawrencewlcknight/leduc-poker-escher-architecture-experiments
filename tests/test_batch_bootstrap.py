@@ -3,6 +3,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from types import SimpleNamespace
 import unittest
 
 from experiments.cloud_source_identity import source_identity
+from gcp.batch_bootstrap import bootstrap
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +51,10 @@ elif command == 'git':
             (target/'.revision').write_text(args[4])
         elif args[2:] == ['rev-parse', 'HEAD']:
             print((target/'.revision').read_text())
+        elif args[2:] == ['diff', '--exit-code', 'HEAD', '--']:
+            if target.name == 'study' and os.environ.get('BROKEN_STUDY') == '1':
+                print('deleted: historical scientific source', file=sys.stderr)
+                sys.exit(1)
         else:
             sys.exit('Unexpected git arguments: '+str(args))
     else:
@@ -72,6 +78,55 @@ def script(experiment, kind, launcher_ref=LAUNCHER):
 
 
 class BatchBootstrapTests(unittest.TestCase):
+    def test_recovery_checkout_can_fetch_historical_blobs_from_partial_clone(self):
+        # A shared clone of a blob-filtered clone does not inherit its promisor
+        # remote. Use a real file:// Git server with filtering enabled so this
+        # catches missing historical objects, unlike our fake-git startup tests.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            upstream = root/'upstream'
+            upstream.mkdir()
+            git = shutil.which('git')
+            env = dict(os.environ, GIT_AUTHOR_NAME='Test', GIT_AUTHOR_EMAIL='test@example.com',
+                       GIT_COMMITTER_NAME='Test', GIT_COMMITTER_EMAIL='test@example.com')
+            def run_git(*args):
+                return subprocess.check_output([git, '-C', str(upstream), *args],
+                    env=env, text=True, stderr=subprocess.PIPE).strip()
+            run_git('init', '--quiet')
+            run_git('config', 'uploadpack.allowFilter', 'true')
+            (upstream/'gcp').mkdir()
+            (upstream/'tests').mkdir()
+            (upstream/'gcp'/'scientific.py').write_text('original scientific code\n')
+            test_file = 'tests/test_critic_update_budget.py'
+            (upstream/test_file).write_text('original scientific test\n')
+            run_git('add', '.')
+            run_git('commit', '--quiet', '-m', 'scientific revision')
+            science = run_git('rev-parse', 'HEAD')
+            expected = source_identity(test_file, upstream)
+            (upstream/'gcp'/'scientific.py').write_text('later launcher revision\n')
+            (upstream/test_file).write_text('later launcher test\n')
+            run_git('add', '.')
+            run_git('commit', '--quiet', '-m', 'launcher revision')
+            launcher = run_git('rev-parse', 'HEAD')
+            fake_env = self.fake_environment(root)
+            # Only apt/sudo/sleep are faked; cloning, filtering and checkout are real.
+            fake_git = root/'bin'/'git'
+            fake_git.unlink()
+            fake_git.symlink_to(git)
+            preamble = bootstrap(50, upstream.as_uri(), science,
+                                 controller=True, launcher_ref=launcher)
+            preamble += '\nprintf "STUDY_CHECKOUT=%s\\n" "$STUDY_REPOSITORY"\n'
+            result = subprocess.run(['bash', '-c', preamble], env=fake_env, text=True,
+                                    capture_output=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            study = Path(next(line.split('=', 1)[1] for line in result.stdout.splitlines()
+                              if line.startswith('STUDY_CHECKOUT=')))
+            self.assertEqual(source_identity(test_file, study), expected, result.stderr)
+            self.assertEqual(subprocess.check_output([git, '-C', str(study), 'status',
+                '--porcelain'], text=True), '')
+            self.assertEqual(subprocess.check_output([git, '-C', str(study), 'rev-parse',
+                'HEAD'], text=True).strip(), science)
+
     def fake_environment(self, root, **extra):
         bindir = root/'bin'
         bindir.mkdir(exist_ok=True)
@@ -146,6 +201,14 @@ export WORK REPOSITORY OUTPUT SOURCE
             self.assertEqual(sum(row[0] == 'sleep' for row in calls), 4)
             self.assertFalse(any(row[0] == 'git' for row in calls))
 
+    def test_successful_git_exit_with_incomplete_study_is_rejected_before_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = self.startup(50, 'controller', self.fake_environment(root, BROKEN_STUDY='1'))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Incomplete or modified checkout', result.stderr)
+            self.assertNotIn('Verified scientific checkout', result.stdout)
+
     def test_all_job_stages_parse_and_pin_the_correct_revision(self):
         for experiment in BUILDERS:
             worker = 'worker' if experiment == 52 else 'train'
@@ -160,6 +223,9 @@ export WORK REPOSITORY OUTPUT SOURCE
                     if kind == 'controller':
                         self.assertIn('export LAUNCHER_REF='+LAUNCHER, text)
                         self.assertIn('REPO_REF='+SCIENCE, text)
+                        self.assertIn('git clone --filter=blob:none --no-checkout', text)
+                        self.assertIn('verify_checkout "$WORK/study"', text)
+                        self.assertNotIn('git clone --shared', text)
                     else:
                         self.assertIn('uv venv --python 3.9 --seed "$WORK/venv"', text)
                         self.assertNotIn('/tmp/exp', text)

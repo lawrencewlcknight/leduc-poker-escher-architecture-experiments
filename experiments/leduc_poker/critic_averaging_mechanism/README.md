@@ -141,6 +141,11 @@ For infrastructure-only recovery, retain `RUN_ID` and `REPO_REF`, set
 `LAUNCHER_REF` to the pushed launcher-fix commit, and choose a new `ATTEMPT`.
 See [shared recovery instructions](../advantage_noise_intervention/README.md#startup-reliability-and-infrastructure-only-recovery).
 The scientific source/runtime/checkpoint checks remain mandatory.
+The controller obtains the historical scientific revision through an independent
+clone, not a shared clone of its partial launcher checkout. It verifies the
+revision and tracked-file completeness before submitting smoke, and logs both
+fingerprints if smoke validation fails. This avoids false mismatches caused by
+unavailable historical Git blobs; it does not bypass source validation.
 
 Worker metadata uses the shared import-safe helper described in
 [Experiment 52's cloud notes](../advantage_noise_intervention/README.md#cloud-execution).

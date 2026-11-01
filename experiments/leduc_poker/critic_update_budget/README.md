@@ -164,6 +164,13 @@ dependencies before production training can begin.
 
 ## Mature pilot and cloud execution
 
+For infrastructure-only recovery, retain `RUN_ID` and `REPO_REF`, set
+`LAUNCHER_REF` to the pushed launcher-fix commit, and choose a new `ATTEMPT`.
+The historical scientific checkout is cloned independently so it can fetch old
+Git blobs. Its revision and tracked-file completeness are verified before cloud
+smoke is submitted. Smoke must still match the original scientific fingerprint;
+failure messages report the observed and expected fingerprints and checkout.
+
 Worker metadata uses the shared import-safe helper described in
 [Experiment 52's cloud notes](../advantage_noise_intervention/README.md#cloud-execution).
 Cloud smoke tests the generated metadata commands, and invalid destinations fail

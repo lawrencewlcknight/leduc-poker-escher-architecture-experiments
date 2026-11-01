@@ -49,7 +49,7 @@ class OptionalPilotLauncherTests(unittest.TestCase):
         cls.commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
 
     def launch(self, experiment, action, *, smoke_state='SUCCEEDED', smoke_status='complete',
-               matching_source=True, attempt='initial', launcher_ref=None):
+               matching_source=True, attempt='initial', launcher_ref=None, study_root=None):
         name = EXPERIMENTS[experiment]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -66,7 +66,8 @@ class OptionalPilotLauncherTests(unittest.TestCase):
             python.write_text('#!/bin/sh\nexec '+shlex.quote(sys.executable)+' "$@"\n')
             python.chmod(0o755)
             (root/'smoke_receipt.json').write_text(json.dumps({'status': smoke_status,
-                'source': source_identity(f'tests/test_{name}.py') if matching_source else 'old-code'}))
+                'source': source_identity(f'tests/test_{name}.py', study_root)
+                          if matching_source else 'old-code'}))
             env = dict(os.environ, PATH=str(bindir)+os.pathsep+os.environ['PATH'],
                 FAKE_CLOUD_ROOT=str(root), FAKE_SMOKE_STATE=smoke_state,
                 PROJECT_ID='example', REGION='europe-west1', BUCKET='gs://example/results',
@@ -75,6 +76,8 @@ class OptionalPilotLauncherTests(unittest.TestCase):
             # Full runs must not depend on pilot source variables either.
             env.pop('SOURCE_URI', None); env.pop('SOURCE_SHA256', None)
             env.pop('STUDY_REPOSITORY', None)
+            if study_root is not None:
+                env['STUDY_REPOSITORY'] = str(study_root)
             env.pop('LAUNCHER_REF', None)
             if launcher_ref is not None:
                 env['LAUNCHER_REF'] = launcher_ref
@@ -139,6 +142,26 @@ class OptionalPilotLauncherTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('LAUNCHER_REF', result.stderr)
             self.assertEqual(calls, [])
+
+    def test_recovery_gate_checks_scientific_checkout_not_launcher_checkout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            study = Path(temporary)
+            (study/'gcp').mkdir()
+            (study/'gcp'/'historical.py').write_text('original scientific code\n')
+            for experiment in EXPERIMENTS:
+                with self.subTest(experiment=experiment):
+                    result, _, configs = self.launch(experiment, 'orchestrate',
+                        attempt='retry2', launcher_ref='b'*40, study_root=study)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(set(configs), {'smoke', 'train', 'aggregate'})
+                    self.assertIn('Verified smoke source fingerprint:', result.stdout)
+                    result, _, configs = self.launch(experiment, 'orchestrate',
+                        attempt='retry2', launcher_ref='b'*40, study_root=study, matching_source=False)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(set(configs), {'smoke'})
+                    self.assertIn('receipt=old-code', result.stderr)
+                    self.assertIn('expected=', result.stderr)
+                    self.assertIn(str(study), result.stderr)
 
     def test_failed_stale_or_incomplete_smoke_blocks_training(self):
         for experiment in EXPERIMENTS:
