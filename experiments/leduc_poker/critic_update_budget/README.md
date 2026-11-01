@@ -224,7 +224,7 @@ bash gcp/run_critic_update_budget.sh status
 ```
 
 The controller runs cloud smoke, checks its completion receipt and source
-fingerprint against the controller's pinned checkout, and then submits the
+fingerprint against the pinned scientific checkout, and then submits the
 12-worker array and analysis. No pilot completion or pilot-code match is required.
 Each worker uses one `n2-standard-8` CPU VM with 150 GB disk and a 72-hour cap;
 automatic retries are disabled. Default concurrency eight uses 64 vCPUs.
@@ -239,6 +239,12 @@ replay, calibration, averaging history, exact-average state, component random
 streams, update counts and accumulated metrics. Playable grouped policies are
 saved at 300 and 600. Receipts hash every required result artifact; source,
 runtime or configuration changes reject continuation.
+
+All stages now isolate task working directories and retry temporary package
+installation failures. To apply a launcher-only repair while retaining existing
+results, also set `LAUNCHER_REF` to the pushed infrastructure-fix commit; it
+defaults to `REPO_REF` for new studies. See
+[shared recovery instructions](../advantage_noise_intervention/README.md#startup-reliability-and-infrastructure-only-recovery).
 
 To resume after an infrastructure failure, retain `RUN_ID`, `REPO_REF` and all
 settings, choose a fresh attempt label, and explicitly resubmit:

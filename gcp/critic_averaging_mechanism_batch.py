@@ -6,6 +6,11 @@ from pathlib import Path
 import math
 import shlex
 
+if __name__ == "__main__" and not __package__:
+    from batch_bootstrap import bootstrap, python_environment
+else:
+    from gcp.batch_bootstrap import bootstrap, python_environment
+
 MODULE="experiments.leduc_poker.critic_averaging_mechanism.run"
 REPO="https://github.com/lawrencewlcknight/leduc-poker-escher-architecture-experiments.git"
 LAUNCHER="gcp/run_critic_averaging_mechanism.sh"
@@ -17,44 +22,22 @@ def q(x):
 
 
 def script(a):
-    text=f'''#!/usr/bin/env bash
-set -Eeuo pipefail
-export DEBIAN_FRONTEND=noninteractive PYTHONUNBUFFERED=1 PYTHONFAULTHANDLER=1
-export CUDA_VISIBLE_DEVICES="" OMP_NUM_THREADS=8 MKL_NUM_THREADS=8
-export MPLCONFIGDIR=/tmp/exp50-mpl XDG_CACHE_HOME=/tmp/exp50-cache
-WORK=/workspace/exp50
-REPOSITORY="$WORK/repository"
-OUTPUT="$WORK/output"
+    launcher_ref = getattr(a, "launcher_ref", None) or a.repo_ref
+    text = bootstrap(50, REPO, a.repo_ref, controller=a.kind == "controller", launcher_ref=launcher_ref)
+    text += f'''
 BUCKET_ROOT={q(a.bucket)}
 RUN_ID={q(a.run_id)}
-mkdir -p "$WORK" "$OUTPUT" "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
-if command -v sudo >/dev/null; then SUDO=sudo; else SUDO=; fi
-$SUDO apt-get update
-$SUDO apt-get install -y git curl ca-certificates python3 python3-venv python3-dev build-essential
-git clone --filter=blob:none {q(REPO)} "$REPOSITORY"
-git -C "$REPOSITORY" checkout --detach {q(a.repo_ref)}
-cd "$REPOSITORY"
 '''
     if a.kind=="controller":
         return text+f'''
 export PROJECT_ID={q(a.project)} REGION={q(a.region)} BUCKET={q(a.bucket)}
 export SA_EMAIL={q(a.service_account)} REPO_REF={q(a.repo_ref)} PARALLELISM={a.parallelism}
+export LAUNCHER_REF={q(launcher_ref)}
 export RUN_ID EXP50_REMOTE_CONTROLLER=1
 export ATTEMPT={q(a.attempt)}
 exec bash {LAUNCHER} orchestrate
 '''
-    text+='''
-export UV_CACHE_DIR=/tmp/uv-cache UV_PYTHON_INSTALL_DIR=/tmp/uv-python
-curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/tmp/uv-bin UV_NO_MODIFY_PATH=1 sh
-export PATH="/tmp/uv-bin:$PATH"
-uv python install 3.9
-uv venv --python 3.9 --seed /tmp/exp50-venv
-source /tmp/exp50-venv/bin/activate
-python -m pip install --upgrade pip setuptools wheel
-python -m pip install --no-cache-dir --no-build-isolation -r requirements.txt
-python -m pip install --no-cache-dir --no-build-isolation -e .
-python -m pip check
-'''
+    text += python_environment()
     if a.kind=="train":
         text+=r'''
 INDEX="${BATCH_TASK_INDEX:?Missing task index}"
@@ -137,6 +120,7 @@ if __name__=="__main__":
     p.add_argument("--source-uri",default="")
     p.add_argument("--source-sha256",default="")
     p.add_argument("--attempt",default="initial")
+    p.add_argument("--launcher-ref", default=None, help="Pinned infrastructure revision; defaults to repo-ref")
     p.add_argument("--output",type=Path,required=True)
     a=p.parse_args()
     if not 3<=a.parallelism<=12:

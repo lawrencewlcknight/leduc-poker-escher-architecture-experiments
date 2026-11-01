@@ -193,7 +193,7 @@ commands in fresh interpreters. The pilot and production worker use the same pat
 This fixes the upload failure in `exp52-noise-20261101-220804-pilot-initial`
 without changing the scientific protocol or weakening completion checks.
 
-When upgrading to this launcher fix, use a new run ID and the corrected commit,
+When upgrading from the original noisy-import implementation, use a new run ID and the corrected commit,
 then rerun `pilot-cloud` before `run`. Pilot/code identity checks intentionally
 do not accept pilot results from another implementation revision. The same
 worker-metadata fix applies to Experiments 50 and 51.
@@ -247,3 +247,52 @@ bash gcp/run_advantage_noise_intervention.sh resume
 Workers verify and reuse completed repetitions. Invalid checksums stop processing
 for inspection; no failed seed/checkpoint is silently dropped. Paid jobs are
 launched only by explicit cloud commands, never by implementation or local smoke.
+
+### Startup reliability and infrastructure-only recovery
+
+The shared startup code for Experiments 50--52 creates a fresh working directory
+for every task invocation, including retries and successive tasks on a reused
+VM. Repository checkout, historical source, outputs, caches and Python environment
+are task-local. It does not remove an earlier task's files. Package installation
+waits up to 300 seconds for the dpkg lock per attempt, uses acquisition retries,
+and retries failed commands up to five times with 30-second delays. Persistent
+errors still stop startup with the original failure code; locks are never
+deleted and system updates are not killed.
+
+This addresses the automatic-update lock failure in the initial Experiment 51
+controller and the existing-checkout failure in Experiment 52's second wave of
+tasks. Single-task pilots do not exercise VM reuse. Local regression tests now
+execute successive tasks and a repeated task on the same mock VM, simulate
+temporary/permanent package-lock failures, and verify all stage scripts:
+
+```bash
+python -m unittest discover -s tests -p test_batch_bootstrap.py
+python -m unittest discover -s tests -p test_optional_pilot_launchers.py
+```
+
+Two independently pinned revisions permit recovery without rewriting scientific
+manifests:
+
+* `REPO_REF` is the **original scientific commit**, used for smoke, pilot,
+  workers and aggregation. Keep it unchanged when reusing completed work.
+* `LAUNCHER_REF` is the **pushed infrastructure commit**, used by the controller
+  to generate repaired job scripts. It defaults to `REPO_REF` for new studies.
+  The controller validates smoke against the original scientific checkout.
+
+After pushing the launcher repair, use the updated local launcher with the same
+run ID, original `REPO_REF` and a fresh attempt label:
+
+```bash
+export LAUNCHER_REF=YOUR_PUSHED_LAUNCHER_FIX_40_CHARACTER_SHA
+export ATTEMPT=retry1
+bash gcp/run_advantage_noise_intervention.sh resume
+```
+
+Use the corresponding `run_critic_averaging_mechanism.sh` or
+`run_critic_update_budget.sh` launcher for Experiments 50 or 51. Stop any active
+controller and worker array before resubmitting the same run, to avoid concurrent
+writes. This does not waive pilot/smoke, runtime, source or checksum checks.
+Experiment 52's complete workers/repetitions are verified and skipped; Experiments
+50/51 recover from their last uploaded full states, or start the same prescribed
+seed from scratch if no full state was saved. Uncheckpointed work is not
+recoverable. No cloud job is restarted automatically by these code changes.

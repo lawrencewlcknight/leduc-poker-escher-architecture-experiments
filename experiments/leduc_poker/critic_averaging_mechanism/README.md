@@ -135,6 +135,13 @@ production dependencies before a training array can start.
 
 ## Engineering pilot and cloud execution
 
+All stages use isolated per-invocation working directories and bounded package
+installation retries, including when Batch reuses a VM for the next task.
+For infrastructure-only recovery, retain `RUN_ID` and `REPO_REF`, set
+`LAUNCHER_REF` to the pushed launcher-fix commit, and choose a new `ATTEMPT`.
+See [shared recovery instructions](../advantage_noise_intervention/README.md#startup-reliability-and-infrastructure-only-recovery).
+The scientific source/runtime/checkpoint checks remain mandatory.
+
 Worker metadata uses the shared import-safe helper described in
 [Experiment 52's cloud notes](../advantage_noise_intervention/README.md#cloud-execution).
 Cloud smoke tests the generated metadata commands, and invalid destinations fail
@@ -185,7 +192,7 @@ bash gcp/run_critic_averaging_mechanism.sh status
 ```
 
 A remote controller waits for cloud smoke, checks its completion receipt and
-source fingerprint against the controller's pinned checkout, then submits 12
+source fingerprint against the pinned scientific checkout, then submits 12
 training tasks and the aggregator. One `n2-standard-8` VM per task; eight simultaneous tasks by default
 (64 vCPUs). Each task has a 72-hour cap, 150 GB disk and no automatic retries.
 The controller is bounded as well. Starting before the pilot completes accepts

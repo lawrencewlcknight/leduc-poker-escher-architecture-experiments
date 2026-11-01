@@ -49,7 +49,7 @@ class OptionalPilotLauncherTests(unittest.TestCase):
         cls.commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
 
     def launch(self, experiment, action, *, smoke_state='SUCCEEDED', smoke_status='complete',
-               matching_source=True, attempt='initial'):
+               matching_source=True, attempt='initial', launcher_ref=None):
         name = EXPERIMENTS[experiment]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -74,6 +74,10 @@ class OptionalPilotLauncherTests(unittest.TestCase):
                 PARALLELISM='3', ATTEMPT=attempt, **{f'EXP{experiment}_REMOTE_CONTROLLER': '1'})
             # Full runs must not depend on pilot source variables either.
             env.pop('SOURCE_URI', None); env.pop('SOURCE_SHA256', None)
+            env.pop('STUDY_REPOSITORY', None)
+            env.pop('LAUNCHER_REF', None)
+            if launcher_ref is not None:
+                env['LAUNCHER_REF'] = launcher_ref
             if action == 'pilot-cloud':
                 env.update(SOURCE_URI='gs://example/source.pt', SOURCE_SHA256='b'*64)
             result = subprocess.run(['bash', f'gcp/run_{name}.sh', action], cwd=ROOT, env=env,
@@ -112,6 +116,29 @@ class OptionalPilotLauncherTests(unittest.TestCase):
                 self.assertEqual(configs['train']['taskGroups'][0]['parallelism'], 3)
                 smoke_script = configs['smoke']['taskGroups'][0]['taskSpec']['runnables'][0]['script']['text']
                 self.assertIn('test_optional_pilot_launchers.py', smoke_script)
+
+    def test_recovery_propagates_launcher_ref_without_changing_scientific_ref(self):
+        infrastructure = 'b'*40
+        for experiment in EXPERIMENTS:
+            for action in ('resume', 'orchestrate'):
+                with self.subTest(experiment=experiment, action=action):
+                    result, _, configs = self.launch(experiment, action, attempt='retry1',
+                                                     launcher_ref=infrastructure)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    for kind, config in configs.items():
+                        text = config['taskGroups'][0]['taskSpec']['runnables'][0]['script']['text']
+                        expected = infrastructure if kind == 'controller' else self.commit
+                        self.assertIn(f'git -C "$REPOSITORY" checkout --detach {expected}', text)
+                        if kind == 'controller':
+                            self.assertIn(f'export LAUNCHER_REF={infrastructure}', text)
+                            self.assertIn(f'REPO_REF={self.commit}', text)
+
+    def test_invalid_launcher_ref_cannot_submit(self):
+        for experiment in EXPERIMENTS:
+            result, calls, _ = self.launch(experiment, 'run', launcher_ref='main')
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('LAUNCHER_REF', result.stderr)
+            self.assertEqual(calls, [])
 
     def test_failed_stale_or_incomplete_smoke_blocks_training(self):
         for experiment in EXPERIMENTS:

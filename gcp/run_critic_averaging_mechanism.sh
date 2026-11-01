@@ -18,6 +18,8 @@ esac
 : "${RUN_ID:?Set a persistent RUN_ID, e.g. exp50-roles-YYYYMMDD}"
 [[ "$RUN_ID" =~ ^[a-z][a-z0-9-]*[a-z0-9]$ && ${#RUN_ID} -le 30 ]] || { echo 'Invalid RUN_ID' >&2; exit 2; }
 [[ "$REPO_REF" =~ ^[0-9a-f]{40}$ ]] || { echo 'Use an exact 40-character commit SHA' >&2; exit 2; }
+LAUNCHER_REF="${LAUNCHER_REF:-$REPO_REF}"
+[[ "$LAUNCHER_REF" =~ ^[0-9a-f]{40}$ ]] || { echo 'LAUNCHER_REF must be an exact commit SHA' >&2; exit 2; }
 [[ "$BUCKET" == gs://* ]] || { echo 'BUCKET must start with gs://' >&2; exit 2; }
 BUCKET="${BUCKET%/}"
 PARALLELISM="${PARALLELISM:-8}"
@@ -28,7 +30,7 @@ TEMP_DIR="$(mktemp -d /tmp/exp50-jobs.XXXXXX)"
 build() {
   python3 "$SCRIPT_DIR/critic_averaging_mechanism_batch.py" --kind "$1" --output "$TEMP_DIR/$1.json" \
     --project "$PROJECT_ID" --region "$REGION" --bucket "$BUCKET" --run-id "$RUN_ID" \
-    --service-account "$SA_EMAIL" --repo-ref "$REPO_REF" --parallelism "$PARALLELISM" --attempt "$ATTEMPT" \
+    --service-account "$SA_EMAIL" --repo-ref "$REPO_REF" --launcher-ref "$LAUNCHER_REF" --parallelism "$PARALLELISM" --attempt "$ATTEMPT" \
     --source-uri "${SOURCE_URI:-}" --source-sha256 "${SOURCE_SHA256:-}"
 }
 submit() { gcloud batch jobs submit "$1" --project "$PROJECT_ID" --location "$REGION" --config "$TEMP_DIR/$2.json"; }
@@ -68,11 +70,11 @@ case "$ACTION" in
     ensure "$RUN_ID-smoke-$ATTEMPT" smoke
     gcloud storage cp "$BUCKET/$RUN_ID/smoke/SMOKE_SUCCESS.json" "$TEMP_DIR/smoke.json"
     python3 - "$TEMP_DIR/smoke.json" <<'PYGATE'
-import json,sys
+import json,os,sys
 from experiments.cloud_source_identity import source_identity
 s=json.load(open(sys.argv[1]))
 assert s['status']=='complete', 'Cloud smoke did not complete'
-assert s['source']==source_identity('tests/test_critic_averaging_mechanism.py'), 'Smoke code differs from confirmation code'
+assert s['source']==source_identity('tests/test_critic_averaging_mechanism.py', os.environ.get('STUDY_REPOSITORY')), 'Smoke code differs from confirmation code'
 PYGATE
     ensure "$RUN_ID-train-$ATTEMPT" train
     ensure "$RUN_ID-aggregate-$ATTEMPT" aggregate ;;

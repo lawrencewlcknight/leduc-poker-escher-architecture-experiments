@@ -16,6 +16,8 @@ ATTEMPT="${ATTEMPT:-initial}"
 [[ "$RUN_ID" =~ ^[a-z][a-z0-9-]*[a-z0-9]$ && ${#RUN_ID} -le 30 ]] || exit 2
 [[ "$SOURCE_RUN_ID" =~ ^[a-z][a-z0-9-]+$ ]] || exit 2
 [[ "$REPO_REF" =~ ^[0-9a-f]{40}$ ]] || { echo 'Use an exact 40-character commit SHA' >&2; exit 2; }
+LAUNCHER_REF="${LAUNCHER_REF:-$REPO_REF}"
+[[ "$LAUNCHER_REF" =~ ^[0-9a-f]{40}$ ]] || { echo 'LAUNCHER_REF must be an exact commit SHA' >&2; exit 2; }
 [[ "$BUCKET" == gs://* && "$SOURCE_BUCKET" == gs://* ]] || exit 2
 [[ "$PARALLELISM" =~ ^[0-9]+$ && "$PARALLELISM" -ge 1 && "$PARALLELISM" -le 6 ]] || exit 2
 [[ "$ATTEMPT" =~ ^[a-z0-9-]+$ && ${#ATTEMPT} -le 12 ]] || exit 2
@@ -25,7 +27,7 @@ build() {
   python3 "$SCRIPT_DIR/advantage_noise_intervention_batch.py" --kind "$1" --output "$TEMP_DIR/$1.json" \
     --project "$PROJECT_ID" --region "$REGION" --bucket "$BUCKET" --source-bucket "$SOURCE_BUCKET" \
     --source-run-id "$SOURCE_RUN_ID" --run-id "$RUN_ID" --service-account "$SA_EMAIL" \
-    --repo-ref "$REPO_REF" --parallelism "$PARALLELISM" --attempt "$ATTEMPT"
+    --repo-ref "$REPO_REF" --launcher-ref "$LAUNCHER_REF" --parallelism "$PARALLELISM" --attempt "$ATTEMPT"
 }
 submit() { gcloud batch jobs submit "$1" --project "$PROJECT_ID" --location "$REGION" --config "$TEMP_DIR/$2.json"; }
 state() { gcloud batch jobs describe "$1" --project "$PROJECT_ID" --location "$REGION" --format='value(status.state)'; }

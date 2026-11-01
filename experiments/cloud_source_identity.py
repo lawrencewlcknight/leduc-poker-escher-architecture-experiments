@@ -3,10 +3,10 @@ import hashlib
 from pathlib import Path
 
 
-def source_identity(test_file):
+def source_identity(test_file, root=None):
     # Preserve the workers' existing fingerprint definition. Controllers do not
     # install ML packages, so validating a smoke receipt must not import them.
-    root = Path(__file__).resolve().parents[1]
+    root = Path(root) if root is not None else Path(__file__).resolve().parents[1]
     digest = hashlib.sha256()
     for folder in ("adaptive_escher", "unbiased_escher", "vr_deep_cfr", "escher_poker", "experiments", "gcp"):
         for path in sorted((root/folder).rglob("*")):
