@@ -2717,8 +2717,9 @@ for 10,000, 2,500 and 500 critic updates plus an exact zero-Q control, using
 three paired seeds (12 runs) and 600 iterations. The Experiment 35/48 learner
 retains residual calibration, adaptive sampling, four-fit critic averaging and
 per-iteration grouped policy fitting. Includes exact estimator audits, actual
-optimizer-step accounting, full-state resume, and a mature timing pilot before
-cloud training.
+optimizer-step accounting, full-state resume, and an optional mature timing pilot.
+Experiments 50 and 51 can launch full runs while their pilots are still running;
+cloud smoke and source/checkpoint integrity checks remain mandatory.
 
 ## Experiment 52: oracle intervention on advantage noise
 

@@ -1,5 +1,4 @@
 """Fixed-workload workers, atomic checkpoints and strict identity checks."""
-import hashlib
 import json
 from pathlib import Path
 import platform
@@ -10,6 +9,7 @@ import numpy as np
 import torch
 
 from escher_poker.policy_snapshots import save_torch_policy_snapshot
+from experiments.cloud_source_identity import source_identity as _source_identity
 from experiments.cloud_worker_identity import worker_remote_from_env
 from experiments.leduc_poker.grouped_wide_policy_confirmation.worker import _peak_rss_mb
 from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.common import write_csv, sha256, validate_playable_snapshot
@@ -28,17 +28,7 @@ def write_json(path, value):
 
 
 def source_identity():
-    root = Path(__file__).resolve().parents[3]
-    digest = hashlib.sha256()
-    for folder in ("adaptive_escher", "unbiased_escher", "vr_deep_cfr", "escher_poker", "experiments", "gcp"):
-        for p in sorted((root/folder).rglob("*")):
-            if p.suffix in (".py", ".sh"):
-                digest.update(str(p.relative_to(root)).encode()); digest.update(p.read_bytes())
-    for name in ("requirements.txt", "setup.py", "pyproject.toml", "tests/test_critic_averaging_mechanism.py"):
-        p = root/name
-        if p.is_file():
-            digest.update(name.encode()); digest.update(p.read_bytes())
-    return digest.hexdigest()
+    return _source_identity("tests/test_critic_averaging_mechanism.py")
 
 
 def runtime():

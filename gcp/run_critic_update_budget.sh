@@ -59,31 +59,20 @@ case "$ACTION" in
     if [[ "$ACTION" == resume && "$ATTEMPT" == initial ]]; then
       echo 'Resume requires a new ATTEMPT; keep RUN_ID and REPO_REF unchanged.' >&2; exit 2
     fi
-    # A mature pilot must have completed in this run namespace. Small smoke
-    # alone is not a resource forecast for the 12-run scientific experiment.
-    gcloud storage cp "$BUCKET/$RUN_ID/pilot/pilot.json" "$TEMP_DIR/pilot.json"
-    python3 - "$TEMP_DIR/pilot.json" <<'PY'
-import json,sys
-p=json.load(open(sys.argv[1]))
-assert p['status']=='complete' and len(p['results'])==4
-assert all(r['mature_replay'] for r in p['results'])
-PY
+    # Timing pilots are optional and may still be running. Cloud smoke remains
+    # mandatory; the controller validates it directly against the pinned code.
     build controller; submit "$RUN_ID-controller-$ATTEMPT" controller ;;
   orchestrate)
     [[ "${EXP51_REMOTE_CONTROLLER:-}" == 1 ]] || exit 2
     for kind in smoke train aggregate; do build "$kind"; done
     ensure "$RUN_ID-smoke-$ATTEMPT" smoke
     gcloud storage cp "$BUCKET/$RUN_ID/smoke/SMOKE_SUCCESS.json" "$TEMP_DIR/smoke.json"
-    gcloud storage cp "$BUCKET/$RUN_ID/pilot/pilot.json" "$TEMP_DIR/pilot.json"
-    python3 - "$TEMP_DIR/pilot.json" "$TEMP_DIR/smoke.json" <<'PYGATE'
+    python3 - "$TEMP_DIR/smoke.json" <<'PYGATE'
 import json,sys
-p,s=(json.load(open(path)) for path in sys.argv[1:])
-assert p['status']==s['status']=='complete'
-assert p['source_code']==s['source'], 'Pilot code differs from confirmation code'
-assert {r['arm'] for r in p['results']}==set('ABCD')
-assert all(r['mature_replay'] for r in p['results'])
-for key in ('python','torch','numpy','open_spiel','platform'):
-    assert p['runtime'][key]==s['runtime'][key], f'Pilot runtime differs: {key}'
+from experiments.cloud_source_identity import source_identity
+s=json.load(open(sys.argv[1]))
+assert s['status']=='complete', 'Cloud smoke did not complete'
+assert s['source']==source_identity('tests/test_critic_update_budget.py'), 'Smoke code differs from confirmation code'
 PYGATE
     ensure "$RUN_ID-train-$ATTEMPT" train
     ensure "$RUN_ID-aggregate-$ATTEMPT" aggregate ;;

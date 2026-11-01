@@ -138,9 +138,10 @@ production dependencies before a training array can start.
 Worker metadata uses the shared import-safe helper described in
 [Experiment 52's cloud notes](../advantage_noise_intervention/README.md#cloud-execution).
 Cloud smoke tests the generated metadata commands, and invalid destinations fail
-before training. After upgrading to the launcher fix, use a new run ID and rerun
-the mature pilot with the corrected commit; old pilot/code identities cannot be
-mixed. The experiment configuration and training budget are unchanged.
+before training. Pilots are optional timing measurements, not prerequisites for
+`run` or `resume`; they may still be running when full training is submitted.
+An older pilot does not need to be repeated merely to match the launcher commit.
+The experiment configuration and training budget are unchanged.
 
 First commit and push the implementation. Cloud jobs require an exact pushed
 40-character SHA. Set the existing project, region, bucket and service account:
@@ -155,9 +156,9 @@ bash gcp/run_critic_averaging_mechanism.sh dry-run
 
 `dry-run` writes job specifications only. It does not submit a job.
 
-Use a trusted archived **Experiment 35 full training state**, not a playable
-policy snapshot, from iteration 300 or later. Provide its independently verified
-SHA256:
+For an optional timing pilot, use a trusted archived **Experiment 35 full training
+state**, not a playable policy snapshot, from iteration 300 or later. Provide
+its independently verified SHA256:
 
 ```bash
 export SOURCE_URI=gs://YOUR_BUCKET/PATH/TO/FULL_STATE.pt
@@ -170,21 +171,26 @@ reloads of the same archived state, applying the controlled proposal and role
 split. This measures engineering cost; it is not pooled with the confirmation.
 Its state schema and critical model/training settings are checked. Inspect
 `$BUCKET/$RUN_ID/pilot/pilot.json`, including memory feasibility and iteration
-cost, before proceeding. The reported 600-iteration extrapolation excludes
+cost, when available. The reported 600-iteration extrapolation excludes
 setup, checkpoint upload and scheduled diagnostics. A fresh reduced pilot is
-also available through the Python CLI but does not satisfy the cloud run gate.
+also available through the Python CLI but is not a production runtime forecast.
+
+The following full-run command does not read or wait for a pilot receipt and
+does not need `SOURCE_URI` or `SOURCE_SHA256`. Existing pilots can continue in
+their separate `pilot/` output prefix. Their results are not pooled with training.
 
 ```bash
 bash gcp/run_critic_averaging_mechanism.sh run
 bash gcp/run_critic_averaging_mechanism.sh status
 ```
 
-A remote controller waits for smoke, checks that mature pilot and smoke used
-identical code and package versions, then submits 12 training tasks and the
-aggregator. One `n2-standard-8` VM per task; eight simultaneous tasks by default
+A remote controller waits for cloud smoke, checks its completion receipt and
+source fingerprint against the controller's pinned checkout, then submits 12
+training tasks and the aggregator. One `n2-standard-8` VM per task; eight simultaneous tasks by default
 (64 vCPUs). Each task has a 72-hour cap, 150 GB disk and no automatic retries.
-The controller is bounded as well. Runtime and cost must be checked against the
-pilot; a provisional 24–36 hours per run implies 288–432 worker VM-hours, or
+The controller is bounded as well. Starting before the pilot completes accepts
+uncertainty about mature runtime and memory. Use the pilot to refine estimates;
+a provisional 24–36 hours per run implies 288–432 worker VM-hours, or
 roughly two to three days at concurrency eight, before overhead. This is not a
 measured forecast for the new experiment. `PARALLELISM` accepts 3–12; reducing
 concurrency lowers the simultaneous quota requirement, not the training work.
@@ -241,7 +247,7 @@ Analysis produces `summary.json`, `seed_blocks.csv`, `curves.csv`, `report.md`,
 ## What has and has not been validated
 
 Local real-Leduc tests and the complete reduced four-arm smoke validate the
-implementation paths. A mature archived-state pilot and Linux cloud smoke are
-still required before production. Neither a scientific result nor a production
-runtime estimate follows from local smoke. The experiment does not launch
+implementation paths. Linux cloud smoke is still required before production;
+the mature archived-state pilot is optional. Neither a scientific result nor a
+production runtime estimate follows from local smoke. The experiment does not launch
 cloud resources merely by importing the module or generating specifications.

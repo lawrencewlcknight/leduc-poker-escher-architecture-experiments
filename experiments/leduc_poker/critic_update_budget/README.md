@@ -167,9 +167,10 @@ dependencies before production training can begin.
 Worker metadata uses the shared import-safe helper described in
 [Experiment 52's cloud notes](../advantage_noise_intervention/README.md#cloud-execution).
 Cloud smoke tests the generated metadata commands, and invalid destinations fail
-before training. After upgrading to the launcher fix, use a new run ID and rerun
-the mature pilot with the corrected commit; old pilot/code identities cannot be
-mixed. The experiment configuration and training budget are unchanged.
+before training. Pilots are optional timing measurements, not prerequisites for
+`run` or `resume`; they may still be running when full training is submitted.
+An older pilot does not need to be repeated merely to match the launcher commit.
+The experiment configuration and training budget are unchanged.
 
 Commit and push before cloud execution; all jobs require an exact pushed
 40-character commit SHA. Set the existing cloud project, region and Batch
@@ -185,7 +186,7 @@ bash gcp/run_critic_update_budget.sh dry-run
 
 `dry-run` writes job specifications only. It submits no cloud work.
 
-Before training, run the engineering pilot using a trusted archived
+For an optional engineering pilot, use a trusted archived
 **Experiment 35 full training state at iteration 300 or later**, with its
 independently verified SHA256. A playable-policy file is insufficient, and
 Experiment 48 intentionally did not retain full states.
@@ -205,7 +206,7 @@ is a process high-water mark across sequential arms and is conservative for
 later arms. Its reported 600-iteration extrapolation excludes setup, scheduled
 diagnostics and checkpoint persistence.
 
-Inspect `$BUCKET/$RUN_ID/pilot/pilot.json` before starting training. Use the
+Inspect `$BUCKET/$RUN_ID/pilot/pilot.json` when available. Use the
 sum of each arm's projected hours multiplied by three seeds to estimate worker
 VM-hours, then allow overhead and apply current regional VM, disk and storage
 prices. **Do not reuse Experiment 50's cost forecast**: that study omits native
@@ -213,18 +214,24 @@ per-iteration policy fitting and calibration. A small smoke is not a production
 runtime or memory forecast. For a local mature pilot, set `SOURCE_STATE`,
 `SOURCE_SHA256`, optionally `PILOT_OUTPUT`, and use `pilot-local`.
 
+The following full-run command does not read or wait for a pilot receipt and
+does not need `SOURCE_URI` or `SOURCE_SHA256`. Existing pilots can continue in
+their separate `pilot/` output prefix. Their results are not pooled with training.
+
 ```bash
 bash gcp/run_critic_update_budget.sh run
 bash gcp/run_critic_update_budget.sh status
 ```
 
-The controller requires the mature pilot, runs cloud smoke, checks matching
-source and package identities, and then submits the 12-worker array and analysis.
+The controller runs cloud smoke, checks its completion receipt and source
+fingerprint against the controller's pinned checkout, and then submits the
+12-worker array and analysis. No pilot completion or pilot-code match is required.
 Each worker uses one `n2-standard-8` CPU VM with 150 GB disk and a 72-hour cap;
 automatic retries are disabled. Default concurrency eight uses 64 vCPUs.
 `PARALLELISM` accepts 3–12; lower concurrency reduces simultaneous quota needs,
-not the total training work. Check the pilot against the memory and time caps
-before launch. The controller can continue after the laptop disconnects.
+not the total training work. Starting before the pilot completes accepts uncertainty
+about mature runtime and memory; use its results to refine the resource forecast.
+The controller can continue after the laptop disconnects.
 
 Full training states are saved every 100 iterations to two alternating files,
 with a checksummed pointer uploaded last. They include networks, optimizers,

@@ -109,6 +109,7 @@ finish_smoke() {{
 trap finish_smoke EXIT
 python -m unittest discover -s tests -p test_critic_averaging_mechanism.py
 python -m unittest discover -s tests -p test_cloud_worker_identity.py
+python -m unittest discover -s tests -p test_optional_pilot_launchers.py
 python -m {MODULE} smoke --output-root "$OUTPUT"
 '''
 
