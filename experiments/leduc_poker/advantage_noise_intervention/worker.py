@@ -1,7 +1,6 @@
 """Atomic paired-repetition outputs and strict identity-checked restart."""
 import hashlib
 import json
-import os
 from pathlib import Path
 import subprocess
 import time
@@ -9,6 +8,7 @@ import time
 import numpy as np
 import torch
 
+from experiments.cloud_worker_identity import worker_remote_from_env
 from experiments.leduc_poker.critic_update_budget.worker import source_identity as base_identity, runtime, verify_files
 from experiments.critic_target_cache_benchmark import sha256, write_json
 from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.common import write_csv
@@ -36,10 +36,8 @@ def receipt(directory, names):
 
 
 def upload(directory):
-    remote = os.environ.get("EXP52_REMOTE_WORKER")
+    remote = worker_remote_from_env("EXP52_REMOTE_WORKER")
     if remote:
-        if not remote.startswith("gs://") or any(c.isspace() for c in remote):
-            raise ValueError("Invalid worker URI")
         subprocess.run(["gcloud", "storage", "rsync", "--recursive", "--exclude", "(^|/)SUCCESS\\.json$|.*\\.tmp$",
                         str(directory), remote], check=True)
         # A failed data upload cannot advertise a newly completed repetition.
@@ -52,6 +50,7 @@ def upload(directory):
 
 
 def run_worker(root, index=0, source=None, smoke=False, pilot=False, stop_after=None):
+    worker_remote_from_env("EXP52_REMOTE_WORKER")
     torch.set_num_threads(1 if smoke else 8)
     plan = contract(smoke, pilot)
     seed, checkpoint = tasks(smoke)[index]

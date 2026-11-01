@@ -66,6 +66,7 @@ gcloud storage rsync --recursive "$OUTPUT/analysis" "$BUCKET_ROOT/$RUN_ID/analys
     if a.kind == "smoke":
         return text + f'''
 python -m unittest discover -s tests -p test_advantage_noise_intervention.py
+python -m unittest discover -s tests -p test_cloud_worker_identity.py
 python -m {MODULE} smoke --output-root "$OUTPUT"
 gcloud storage rsync --recursive "$OUTPUT" "$BUCKET_ROOT/$RUN_ID/smoke"
 '''
@@ -75,12 +76,12 @@ gcloud storage rsync --recursive "$OUTPUT" "$BUCKET_ROOT/$RUN_ID/smoke"
     return text + f'''
 INDEX="{index}"
 REMOTE="{remote}"
-python -m {MODULE} fetch-source --bucket "$SOURCE_BUCKET" --source-run-id "$SOURCE_RUN_ID" \\
-  --task-index "$INDEX" --directory "$SOURCE"
-TASK="$(python -c 'from experiments.leduc_poker.advantage_noise_intervention.config import tasks; import sys; s,c=tasks()[int(sys.argv[1])]; print(f"seed_{{s}}_{{c}}")' "$INDEX")"
+TASK="$(python -m experiments.cloud_worker_identity --experiment 52 --task-index "$INDEX" --remote-root "$REMOTE")"
 export EXP52_REMOTE_WORKER="$REMOTE/workers/$TASK"
 LOCAL_WORKER="$OUTPUT/workers/$TASK"
 mkdir -p "$LOCAL_WORKER"
+python -m {MODULE} fetch-source --bucket "$SOURCE_BUCKET" --source-run-id "$SOURCE_RUN_ID" \\
+  --task-index "$INDEX" --directory "$SOURCE"
 if gcloud storage ls "$EXP52_REMOTE_WORKER/manifest.json" >/dev/null 2>&1; then
   gcloud storage rsync --recursive "$EXP52_REMOTE_WORKER" "$LOCAL_WORKER"
 fi

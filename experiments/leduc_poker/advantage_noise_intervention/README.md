@@ -185,6 +185,19 @@ model-free learning results. There is no effect-based stopping or seed replaceme
 
 ## Cloud execution
 
+Worker metadata is emitted by `experiments.cloud_worker_identity`. Configuration
+imports can print OpenSpiel optional-module warnings; these are routed to stderr,
+never included in worker names or GCS paths. Destinations are validated before
+source download or computation, and cloud smoke executes the generated metadata
+commands in fresh interpreters. The pilot and production worker use the same path.
+This fixes the upload failure in `exp52-noise-20261101-220804-pilot-initial`
+without changing the scientific protocol or weakening completion checks.
+
+When upgrading to this launcher fix, use a new run ID and the corrected commit,
+then rerun `pilot-cloud` before `run`. Pilot/code identity checks intentionally
+do not accept pilot results from another implementation revision. The same
+worker-metadata fix applies to Experiments 50 and 51.
+
 Commit and push before using cloud jobs. Pin the exact 40-character pushed SHA;
 the source bucket can differ from the destination bucket:
 

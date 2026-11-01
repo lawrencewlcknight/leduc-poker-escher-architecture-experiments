@@ -164,6 +164,13 @@ dependencies before production training can begin.
 
 ## Mature pilot and cloud execution
 
+Worker metadata uses the shared import-safe helper described in
+[Experiment 52's cloud notes](../advantage_noise_intervention/README.md#cloud-execution).
+Cloud smoke tests the generated metadata commands, and invalid destinations fail
+before training. After upgrading to the launcher fix, use a new run ID and rerun
+the mature pilot with the corrected commit; old pilot/code identities cannot be
+mixed. The experiment configuration and training budget are unchanged.
+
 Commit and push before cloud execution; all jobs require an exact pushed
 40-character commit SHA. Set the existing cloud project, region and Batch
 service account, and choose a persistent run ID:

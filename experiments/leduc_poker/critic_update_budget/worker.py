@@ -1,7 +1,6 @@
 """Fixed-workload workers, atomic checkpoints and strict identity checks."""
 import hashlib
 import json
-import os
 from pathlib import Path
 import platform
 import subprocess
@@ -11,6 +10,7 @@ import numpy as np
 import torch
 
 from escher_poker.policy_snapshots import save_torch_policy_snapshot
+from experiments.cloud_worker_identity import worker_remote_from_env
 from experiments.leduc_poker.grouped_wide_policy_confirmation.worker import _peak_rss_mb
 from experiments.leduc_poker.promoted_ucv_cross_entropy_36h.common import write_csv, sha256, validate_playable_snapshot
 from experiments.leduc_poker.ucv_residual_target_factorial.training_state import save_training_state, read_training_state
@@ -53,16 +53,14 @@ def remote_copy(local, remote):
 
 
 def save_checkpoint(directory, solver, arm, seed, config, identity, progress):
+    remote = worker_remote_from_env("EXP51_REMOTE_WORKER")
     # Two alternating complete states, with a small pointer committed last.
     slot = (solver.num_iteration // (2 if progress["smoke"] else 100)) % 2
     path = directory / f"state_{slot}.pt"
     started = time.perf_counter()
     save_training_state(path, pack(solver, arm, seed, config, identity, progress))
     marker = {"file": path.name, "sha256": sha256(path), "iteration": solver.num_iteration}
-    remote = os.environ.get("EXP51_REMOTE_WORKER")
     if remote:
-        if not remote.startswith("gs://") or any(c.isspace() for c in remote):
-            raise ValueError("Invalid remote worker URI")
         # Persist every artifact needed by this state before advancing the
         # remote pointer, including earlier playable snapshots and metrics.
         for artifact in sorted(directory.iterdir()):
@@ -84,6 +82,7 @@ def verify_files(directory, receipt):
 
 
 def run_worker(directory, arm, seed, smoke=False, stop_after=None):
+    remote = worker_remote_from_env("EXP51_REMOTE_WORKER")
     if (arm,seed) not in tasks(smoke):
         raise ValueError("Worker not in the frozen seed/arm schedule")
     torch.set_num_threads(1 if smoke else 8)
@@ -99,7 +98,6 @@ def run_worker(directory, arm, seed, smoke=False, stop_after=None):
         raise ValueError("Nonempty worker without manifest")
     else:
         write_json(manifest_path, manifest)
-    remote = os.environ.get("EXP51_REMOTE_WORKER")
     if remote:
         remote_copy(manifest_path, remote+"/manifest.json")
     if (directory/"SUCCESS.json").exists():

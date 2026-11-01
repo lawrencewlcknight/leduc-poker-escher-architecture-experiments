@@ -58,7 +58,7 @@ python -m pip check
     if a.kind=="train":
         text+=r'''
 INDEX="${BATCH_TASK_INDEX:?Missing task index}"
-TASK="$(python -c 'import sys; from experiments.leduc_poker.critic_averaging_mechanism.config import tasks; i=int(sys.argv[1]); a,s=tasks()[i]; print(f"task_{i:03d}_{a}_{s}")' "$INDEX")"
+TASK="$(python -m experiments.cloud_worker_identity --experiment 50 --task-index "$INDEX" --remote-root "$BUCKET_ROOT/$RUN_ID")"
 LOCAL_WORKER="$OUTPUT/workers/$TASK"
 export EXP50_REMOTE_WORKER="$BUCKET_ROOT/$RUN_ID/workers/$TASK"
 mkdir -p "$LOCAL_WORKER"
@@ -108,6 +108,7 @@ finish_smoke() {{
 }}
 trap finish_smoke EXIT
 python -m unittest discover -s tests -p test_critic_averaging_mechanism.py
+python -m unittest discover -s tests -p test_cloud_worker_identity.py
 python -m {MODULE} smoke --output-root "$OUTPUT"
 '''
 
